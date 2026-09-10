@@ -27,16 +27,20 @@ CANONICO = f"https://www.youtube.com/watch?v={ID}"
 # A.1 — Formas equivalentes
 # ===========================================================================
 
-@pytest.mark.parametrize("url", [
-    f"https://youtu.be/{ID}",
-    f"https://www.youtube.com/watch?v={ID}",
-    f"https://youtube.com/watch?v={ID}",
-    f"https://m.youtube.com/watch?v={ID}",
-    f"https://www.youtube.com/shorts/{ID}",
-    f"https://www.youtube.com/embed/{ID}",
-    f"https://www.youtube.com/live/{ID}",
-    f"https://www.youtube.com/v/{ID}",
-])
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"https://youtu.be/{ID}",
+        f"https://www.youtube.com/watch?v={ID}",
+        f"https://youtube.com/watch?v={ID}",
+        f"https://m.youtube.com/watch?v={ID}",
+        f"https://www.youtube.com/shorts/{ID}",
+        f"https://www.youtube.com/embed/{ID}",
+        f"https://www.youtube.com/live/{ID}",
+        f"https://www.youtube.com/v/{ID}",
+    ],
+)
 def test_a1_formas_equivalentes_dao_o_mesmo_canonico(url):
     r = normalizar_link(url)
     assert r.ok
@@ -48,6 +52,7 @@ def test_a1_formas_equivalentes_dao_o_mesmo_canonico(url):
 # ===========================================================================
 # A.2 / A.3 — O parâmetro ?si= do botão compartilhar
 # ===========================================================================
+
 
 def test_a2_remove_parametro_si_do_compartilhar():
     """O caso confirmado nos dados reais.
@@ -73,6 +78,7 @@ def test_a3_dois_si_diferentes_sao_o_mesmo_video():
 # A.4 / A.5 / A.6 — Outros parâmetros e esquema
 # ===========================================================================
 
+
 def test_a4_remove_timestamp():
     assert normalizar_link(f"https://www.youtube.com/watch?v={ID}&t=42").url == CANONICO
 
@@ -96,16 +102,20 @@ def test_a6b_ordem_dos_parametros_nao_importa():
 # A.7 — Canal e playlist são rejeitados
 # ===========================================================================
 
-@pytest.mark.parametrize("url", [
-    "https://www.youtube.com/@Canal_michuruca",
-    "https://www.youtube.com/@Canal_michuruca/videos",
-    "https://www.youtube.com/@Canal_michuruca/shorts",
-    "https://www.youtube.com/playlist?list=PLabcdef123",
-    "https://www.youtube.com/c/AlgumCanal",
-    "https://www.youtube.com/channel/UCabcdefghijklmnopqrstu",
-    "https://www.youtube.com/user/alguem",
-    "https://www.youtube.com/feed/subscriptions",
-])
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://www.youtube.com/@Canal_michuruca",
+        "https://www.youtube.com/@Canal_michuruca/videos",
+        "https://www.youtube.com/@Canal_michuruca/shorts",
+        "https://www.youtube.com/playlist?list=PLabcdef123",
+        "https://www.youtube.com/c/AlgumCanal",
+        "https://www.youtube.com/channel/UCabcdefghijklmnopqrstu",
+        "https://www.youtube.com/user/alguem",
+        "https://www.youtube.com/feed/subscriptions",
+    ],
+)
 def test_a7_canal_e_playlist_sao_rejeitados(url):
     """Download em massa está fora de escopo (SPEC 2.2).
 
@@ -126,6 +136,7 @@ def test_a7b_url_de_video_nao_e_confundida_com_canal():
 # A.8 / A.9 — Entradas rejeitadas
 # ===========================================================================
 
+
 def test_a8_id_nu_e_rejeitado():
     """Decisão do autor: 11 caracteres soltos é mais provável erro de colagem
     do que intenção. O yt-dlp aceitaria; nós não."""
@@ -133,10 +144,13 @@ def test_a8_id_nu_e_rejeitado():
         normalizar_link(ID)
 
 
+# Tabela protegida do formatador: linha 1 é lixo textual, linha 2 são esquemas perigosos ou incompletos.
+# fmt: off
 @pytest.mark.parametrize("entrada", [
     "", "   ", "não é url", "isso aqui é uma frase", "ftp://exemplo.com/x",
     "javascript:alert(1)", "youtube", "https://",
 ])
+# fmt: on
 def test_a9_lixo_e_rejeitado(entrada):
     with pytest.raises(LinkInvalido):
         normalizar_link(entrada)

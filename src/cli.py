@@ -27,13 +27,14 @@ from .pipeline import ErroDePedido, Pipeline
 
 RAIZ = Path(__file__).resolve().parent.parent
 
-INTERVALO_PROGRESSO = 0.2       # segundos entre leituras da fila
+INTERVALO_PROGRESSO = 0.2  # segundos entre leituras da fila
 ESTADOS_VIVOS = {"na_fila", "baixando"}
 
 
 # ===========================================================================
 # Formatação — a API entrega valor cru, como para a web
 # ===========================================================================
+
 
 def fmt_duracao(segundos) -> str:
     """65 -> 1:05 ; 3725 -> 1:02:05 ; None -> --:--"""
@@ -82,6 +83,7 @@ def encurtar(texto: str, limite: int = 58) -> str:
 # Listagens
 # ===========================================================================
 
+
 def largura_do_nome(itens: list[dict], minimo: int = 12) -> int:
     """A coluna acompanha o nome mais longo: um projeto chamado
     `cliente_exemplo` não pode desalinhar a lista inteira."""
@@ -92,8 +94,9 @@ def listar_perfis(config: dict, escrever) -> int:
     escrever("PERFIS — config/perfis.yaml\n")
     coluna = largura_do_nome(config["perfis"])
     for perfil in config["perfis"]:
-        teto = ("qualquer" if perfil["limite_dimensao"] is None
-                else f"até {perfil['limite_dimensao']}p")
+        teto = (
+            "qualquer" if perfil["limite_dimensao"] is None else f"até {perfil['limite_dimensao']}p"
+        )
         marca = "" if perfil["disponivel"] else "   [indisponível: exige ffmpeg]"
         escrever(f"  {perfil['nome']:<{coluna}}  {perfil['descricao']}")
         escrever(f"  {'':<{coluna}}  {teto} · .{perfil['container']}{marca}\n")
@@ -110,29 +113,36 @@ def listar_projetos(config: dict, escrever) -> int:
             escrever(f"  {'':<{coluna}}  [inválido: {projeto['motivo']}]")
         elif not Path(projeto["pasta"]).exists():
             # SPEC 13.1 decisão 6: a pasta nasce no primeiro download.
-            escrever(f"  {'':<{coluna}}  "
-                     "(ainda não existe; criada no primeiro download)")
+            escrever(f"  {'':<{coluna}}  (ainda não existe; criada no primeiro download)")
         escrever("")
     return 0
 
 
 def listar_historico(registros: list[dict], escrever, filtrou: bool = False) -> int:
     if not registros:
-        escrever("Nenhum registro para essa busca."
-                 if filtrou else
-                 "O histórico está vazio: nada foi baixado ainda.")
+        escrever(
+            "Nenhum registro para essa busca."
+            if filtrou
+            else "O histórico está vazio: nada foi baixado ainda."
+        )
         return 0
 
     escrever(f"HISTÓRICO — {len(registros)} tentativa(s), mais recente primeiro\n")
     for reg in registros:
         selo = "já existia" if reg.get("ja_existia") else reg["status"]
         escrever(f"  [{selo}] {encurtar(reg['titulo'], 62)}")
-        detalhe = " · ".join(filter(None, [
-            reg["perfil"], reg["projeto"],
-            reg.get("resolucao") or None,
-            fmt_bytes(reg.get("tamanho_bytes")) if reg.get("tamanho_bytes") else None,
-            fmt_data(reg.get("concluido_em") or reg.get("criado_em")),
-        ]))
+        detalhe = " · ".join(
+            filter(
+                None,
+                [
+                    reg["perfil"],
+                    reg["projeto"],
+                    reg.get("resolucao") or None,
+                    fmt_bytes(reg.get("tamanho_bytes")) if reg.get("tamanho_bytes") else None,
+                    fmt_data(reg.get("concluido_em") or reg.get("criado_em")),
+                ],
+            )
+        )
         escrever(f"      {detalhe}")
         if reg.get("caminho"):
             escrever(f"      {reg['caminho']}")
@@ -148,6 +158,7 @@ def listar_historico(registros: list[dict], escrever, filtrou: bool = False) -> 
 # Dry-run
 # ===========================================================================
 
+
 def mostrar_simulacao(itens: list[dict], projeto: str, escrever) -> int:
     """Mostra o que seria baixado e PARA ONDE, sem baixar nada."""
     escrever(f"DRY-RUN — nada será baixado (projeto {projeto})\n")
@@ -162,13 +173,16 @@ def mostrar_simulacao(itens: list[dict], projeto: str, escrever) -> int:
 
         video = item["video"]
         escrever(f"  {numero}. {encurtar(video['titulo'], 62)}")
-        escrever(f"      {video['canal'] or 'canal desconhecido'} · "
-                 f"{fmt_duracao(video['duracao_s'])} · {video['extractor']}")
+        escrever(
+            f"      {video['canal'] or 'canal desconhecido'} · "
+            f"{fmt_duracao(video['duracao_s'])} · {video['extractor']}"
+        )
         escrever(f"      destino: {item['destino']}")
         if item["ja_baixado"]:
             ja = item["ja_baixado"]
-            escrever(f"      já baixado neste perfil em {fmt_data(ja['concluido_em'])}: "
-                     f"{ja['caminho']}")
+            escrever(
+                f"      já baixado neste perfil em {fmt_data(ja['concluido_em'])}: {ja['caminho']}"
+            )
             escrever("      sem --forcar, este link é recusado com conflito")
         if item["aviso"]:
             escrever(f"      aviso: {item['aviso']}")
@@ -178,8 +192,10 @@ def mostrar_simulacao(itens: list[dict], projeto: str, escrever) -> int:
         # `enfileirar` é tudo ou nada (SPEC 11.1): um link ruim barra a lista
         # inteira. Dizer isso agora evita a surpresa de rodar sem --dry-run e
         # não baixar nada.
-        escrever(f"{problemas} link(s) com problema. Numa execução de verdade "
-                 "nada seria enfileirado: a fila é tudo ou nada.")
+        escrever(
+            f"{problemas} link(s) com problema. Numa execução de verdade "
+            "nada seria enfileirado: a fila é tudo ou nada."
+        )
     return 1 if problemas else 0
 
 
@@ -187,8 +203,8 @@ def mostrar_simulacao(itens: list[dict], projeto: str, escrever) -> int:
 # Download
 # ===========================================================================
 
-def acompanhar(pipeline, ids: list[str], escrever, tty: bool,
-               dormir=time.sleep) -> list[dict]:
+
+def acompanhar(pipeline, ids: list[str], escrever, tty: bool, dormir=time.sleep) -> list[dict]:
     """Segue a fila até todos terminarem e devolve os jobs finais.
 
     Lê o estado pela mesma `estado_fila()` que a web consulta por polling. O
@@ -231,10 +247,12 @@ def linha_de_progresso(job: dict, indice: int, total: int) -> str:
     pedaco = "--%" if percentual is None else f"{round(percentual):>3d}%"
     velocidade = progresso.get("velocidade_bps")
     eta = progresso.get("eta_s")
-    return (f"  [{indice}/{total}] {pedaco}  "
-            f"{fmt_bytes(progresso.get('baixados'))} / {fmt_bytes(progresso.get('total'))}  "
-            f"{fmt_bytes(velocidade) + '/s' if velocidade else '--'}  "
-            f"restam {fmt_duracao(eta)}  {encurtar(job['video']['titulo'], 34)}")
+    return (
+        f"  [{indice}/{total}] {pedaco}  "
+        f"{fmt_bytes(progresso.get('baixados'))} / {fmt_bytes(progresso.get('total'))}  "
+        f"{fmt_bytes(velocidade) + '/s' if velocidade else '--'}  "
+        f"restam {fmt_duracao(eta)}  {encurtar(job['video']['titulo'], 34)}"
+    )
 
 
 def rotulo(job: dict) -> str:
@@ -253,8 +271,7 @@ def relatorio(jobs: list[dict], escrever) -> int:
     concluidos = [j for j in jobs if j["estado"] == "concluido" and not j["ja_existia"]]
     ja_existiam = [j for j in jobs if j["estado"] == "concluido" and j["ja_existia"]]
     falharam = [j for j in jobs if j["estado"] == "falhou"]
-    outros = [j for j in jobs
-              if j["estado"] not in ("concluido", "falhou")]
+    outros = [j for j in jobs if j["estado"] not in ("concluido", "falhou")]
 
     escrever("\nRESUMO")
     escrever(f"  baixados:    {len(concluidos)}")
@@ -282,9 +299,17 @@ def relatorio(jobs: list[dict], escrever) -> int:
     return 1 if (falharam or outros) else 0
 
 
-def baixar(pipeline, urls: list[str], perfil: str, projeto: str | None,
-           forcar: bool, escrever, tty: bool, dormir=time.sleep,
-           pasta: str | None = None) -> int:
+def baixar(
+    pipeline,
+    urls: list[str],
+    perfil: str,
+    projeto: str | None,
+    forcar: bool,
+    escrever,
+    tty: bool,
+    dormir=time.sleep,
+    pasta: str | None = None,
+) -> int:
     ids = pipeline.enfileirar(urls, perfil, projeto, forcar, pasta)
     plural = "link" if len(ids) == 1 else "links"
     onde = f"projeto {projeto}" if projeto else f"pasta avulsa {pasta}"
@@ -297,6 +322,7 @@ def baixar(pipeline, urls: list[str], perfil: str, projeto: str | None,
 # ===========================================================================
 # Argumentos
 # ===========================================================================
+
 
 def construir_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -311,48 +337,61 @@ def construir_parser() -> argparse.ArgumentParser:
             "  python -m src.cli --historico selecao\n"
         ),
     )
-    parser.add_argument("urls", nargs="*", metavar="URL",
-                        help="um ou mais links, separados por espaço")
+    parser.add_argument(
+        "urls", nargs="*", metavar="URL", help="um ou mais links, separados por espaço"
+    )
     parser.add_argument("--perfil", help="nome do perfil de qualidade")
-    parser.add_argument("--projeto",
-                        help="nome do projeto de destino; também filtra o --historico")
-    parser.add_argument("--pasta",
-                        help="pasta de destino avulsa, usada só neste download "
-                             "e não cadastrada; alternativa ao --projeto")
-    parser.add_argument("--forcar", action="store_true",
-                        help="baixa de novo um vídeo já concluído neste perfil")
-    parser.add_argument("--dry-run", action="store_true", dest="dry_run",
-                        help="mostra o que seria baixado e para onde, sem baixar")
-    parser.add_argument("--perfis", action="store_true",
-                        help="lista os perfis do YAML e sai")
-    parser.add_argument("--projetos", action="store_true",
-                        help="lista os projetos do YAML e sai")
-    parser.add_argument("--historico", nargs="?", const="", metavar="TERMO",
-                        help="consulta o histórico; TERMO busca no título")
-    parser.add_argument("--limite", type=int, default=100,
-                        help="máximo de registros do --historico (padrão 100)")
+    parser.add_argument("--projeto", help="nome do projeto de destino; também filtra o --historico")
+    parser.add_argument(
+        "--pasta",
+        help="pasta de destino avulsa, usada só neste download "
+        "e não cadastrada; alternativa ao --projeto",
+    )
+    parser.add_argument(
+        "--forcar", action="store_true", help="baixa de novo um vídeo já concluído neste perfil"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        dest="dry_run",
+        help="mostra o que seria baixado e para onde, sem baixar",
+    )
+    parser.add_argument("--perfis", action="store_true", help="lista os perfis do YAML e sai")
+    parser.add_argument("--projetos", action="store_true", help="lista os projetos do YAML e sai")
+    parser.add_argument(
+        "--historico",
+        nargs="?",
+        const="",
+        metavar="TERMO",
+        help="consulta o histórico; TERMO busca no título",
+    )
+    parser.add_argument(
+        "--limite", type=int, default=100, help="máximo de registros do --historico (padrão 100)"
+    )
     return parser
 
 
 def main(argv: list[str] | None = None, *, pipeline=None, escrever=None) -> int:
     """`pipeline` e `escrever` entram por injeção para o teste não subir a
     aplicação inteira nem depender de captura de stdout."""
-    sys.stdout.reconfigure(encoding="utf-8")    # console cp1252 (RESEARCH 7.4)
+    sys.stdout.reconfigure(encoding="utf-8")  # console cp1252 (RESEARCH 7.4)
     argumentos = construir_parser().parse_args(argv)
 
     if escrever is None:
+
         def escrever(texto="", fim="\n"):
             print(texto, end=fim, flush=True)
 
     consultas = argumentos.perfis or argumentos.projetos or argumentos.historico is not None
     if not consultas and not argumentos.urls:
-        escrever("Nada a fazer: informe pelo menos um link, ou use "
-                 "--perfis, --projetos ou --historico.")
+        escrever(
+            "Nada a fazer: informe pelo menos um link, ou use --perfis, --projetos ou --historico."
+        )
         return 1
-    if not consultas and not (argumentos.perfil
-                              and (argumentos.projeto or argumentos.pasta)):
-        escrever("Faltou --perfil, e --projeto ou --pasta. "
-                 "Veja as opções com --perfis e --projetos.")
+    if not consultas and not (argumentos.perfil and (argumentos.projeto or argumentos.pasta)):
+        escrever(
+            "Faltou --perfil, e --projeto ou --pasta. Veja as opções com --perfis e --projetos."
+        )
         return 1
 
     proprio = pipeline is None
@@ -366,8 +405,10 @@ def main(argv: list[str] | None = None, *, pipeline=None, escrever=None) -> int:
         escrever(f"Erro: {erro}")
         return 1
     except KeyboardInterrupt:
-        escrever("\nInterrompido. O download em andamento continua registrado "
-                 "no histórico como interrompido.")
+        escrever(
+            "\nInterrompido. O download em andamento continua registrado "
+            "no histórico como interrompido."
+        )
         return 1
     finally:
         if proprio:
@@ -381,19 +422,29 @@ def _executar(pipeline, argumentos, escrever) -> int:
         return listar_projetos(pipeline.config(), escrever)
     if argumentos.historico is not None:
         return listar_historico(
-            pipeline.historico(argumentos.historico or None,
-                               argumentos.projeto, argumentos.limite),
+            pipeline.historico(argumentos.historico or None, argumentos.projeto, argumentos.limite),
             escrever,
-            filtrou=bool(argumentos.historico or argumentos.projeto))
+            filtrou=bool(argumentos.historico or argumentos.projeto),
+        )
     destino = argumentos.projeto or argumentos.pasta
     if argumentos.dry_run:
         return mostrar_simulacao(
-            pipeline.simular(argumentos.urls, argumentos.perfil,
-                             argumentos.projeto, argumentos.pasta),
-            destino, escrever)
-    return baixar(pipeline, argumentos.urls, argumentos.perfil, argumentos.projeto,
-                  argumentos.forcar, escrever, sys.stdout.isatty(),
-                  pasta=argumentos.pasta)
+            pipeline.simular(
+                argumentos.urls, argumentos.perfil, argumentos.projeto, argumentos.pasta
+            ),
+            destino,
+            escrever,
+        )
+    return baixar(
+        pipeline,
+        argumentos.urls,
+        argumentos.perfil,
+        argumentos.projeto,
+        argumentos.forcar,
+        escrever,
+        sys.stdout.isatty(),
+        pasta=argumentos.pasta,
+    )
 
 
 if __name__ == "__main__":

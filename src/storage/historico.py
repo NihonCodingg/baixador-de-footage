@@ -26,8 +26,7 @@ from ..domain.models import Video
 
 SCHEMA = Path(__file__).with_name("schema.sql")
 
-AVISO_JA_EXISTIA = ("O arquivo já existia no destino; o download foi pulado e "
-                    "nada foi sobrescrito.")
+AVISO_JA_EXISTIA = "O arquivo já existia no destino; o download foi pulado e nada foi sobrescrito."
 
 
 class RegistroNaoEncontrado(Exception):
@@ -37,6 +36,7 @@ class RegistroNaoEncontrado(Exception):
 @dataclass(frozen=True)
 class RegistroHistorico:
     """Uma linha da tabela, espelhando o schema.sql."""
+
     id: int
     extractor: str
     video_id: str
@@ -155,8 +155,9 @@ class Historico:
 
     # --------------------------------------------------------------- escrita
 
-    def iniciar(self, video: Video, *, perfil: str, projeto: str,
-                url_original: str) -> RegistroHistorico:
+    def iniciar(
+        self, video: Video, *, perfil: str, projeto: str, url_original: str
+    ) -> RegistroHistorico:
         """Grava uma NOVA linha `baixando` e devolve o registro criado.
 
         Nunca substitui uma tentativa anterior: o registro do arquivo que já
@@ -173,9 +174,19 @@ class Historico:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                           NULL, NULL, NULL, 'baixando', 0, NULL, NULL, NULL, ?, NULL)
                 """,
-                (video.extractor, video.video_id, perfil, url_original,
-                 video.url_canonica, video.titulo, normalizar_busca(video.titulo),
-                 video.canal, video.duracao_s, projeto, self._agora()),
+                (
+                    video.extractor,
+                    video.video_id,
+                    perfil,
+                    url_original,
+                    video.url_canonica,
+                    video.titulo,
+                    normalizar_busca(video.titulo),
+                    video.canal,
+                    video.duracao_s,
+                    projeto,
+                    self._agora(),
+                ),
             )
             return self.obter_por_id(cursor.lastrowid)
 
@@ -191,9 +202,15 @@ class Historico:
             (caminho, registro_id),
         )
 
-    def concluir(self, registro_id: int, *, caminho: str, tamanho_bytes: int | None,
-                 resolucao: str | None = None,
-                 ja_existia: bool = False) -> RegistroHistorico:
+    def concluir(
+        self,
+        registro_id: int,
+        *,
+        caminho: str,
+        tamanho_bytes: int | None,
+        resolucao: str | None = None,
+        ja_existia: bool = False,
+    ) -> RegistroHistorico:
         """`ja_existia` marca que o arquivo já estava no destino e o download
         foi pulado — sucesso, mas com aviso (decisão 1)."""
         with self._lock:
@@ -209,8 +226,15 @@ class Historico:
                        resolucao = ?, ja_existia = ?, aviso = ?, concluido_em = ?
                  WHERE id = ?
                 """,
-                (caminho, tamanho_bytes, resolucao, int(ja_existia), aviso,
-                 self._agora(), registro_id),
+                (
+                    caminho,
+                    tamanho_bytes,
+                    resolucao,
+                    int(ja_existia),
+                    aviso,
+                    self._agora(),
+                    registro_id,
+                ),
             )
 
     def falhar(self, registro_id: int, *, motivo: str, mensagem: str) -> RegistroHistorico:
@@ -248,8 +272,10 @@ class Historico:
         pretendido, para o pipeline verificar se há arquivo no destino.
         """
         with self._lock:
-            ids = [row["id"] for row in
-                   self._executar("SELECT id FROM historico WHERE status = 'baixando'")]
+            ids = [
+                row["id"]
+                for row in self._executar("SELECT id FROM historico WHERE status = 'baixando'")
+            ]
             if not ids:
                 return []
             self._executar(
@@ -265,8 +291,7 @@ class Historico:
         cursor = self._executar("SELECT * FROM historico WHERE id = ?", (registro_id,))
         return self._linha(cursor.fetchone())
 
-    def ja_baixado(self, extractor: str, video_id: str,
-                   perfil: str) -> RegistroHistorico | None:
+    def ja_baixado(self, extractor: str, video_id: str, perfil: str) -> RegistroHistorico | None:
         """A tentativa CONCLUÍDA mais recente da tripla, ou None.
 
         Alimenta o aviso de duplicata. Uma falha posterior não apaga o
@@ -283,8 +308,9 @@ class Historico:
         )
         return self._linha(cursor.fetchone())
 
-    def buscar(self, termo: str | None = None, projeto: str | None = None,
-               limite: int = 100) -> list[RegistroHistorico]:
+    def buscar(
+        self, termo: str | None = None, projeto: str | None = None, limite: int = 100
+    ) -> list[RegistroHistorico]:
         """Mais recente primeiro. Termo casa por substring no título
         normalizado; projeto casa por igualdade."""
         condicoes: list[str] = []

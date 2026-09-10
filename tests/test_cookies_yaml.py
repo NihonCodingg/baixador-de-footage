@@ -23,6 +23,7 @@ def arquivo(tmp_path):
 # Leitura
 # ===========================================================================
 
+
 def test_arquivo_ausente_e_desativado(arquivo):
     """Quem clona o repositório e não tem o arquivo não pode ver um erro."""
     assert ler(arquivo) == (None, None)
@@ -59,6 +60,7 @@ def test_conteudo_que_nao_e_mapa_e_desativado(arquivo):
 # Escrita
 # ===========================================================================
 
+
 def test_escrever_e_ler_de_volta(arquivo):
     escrever(arquivo, "firefox", "default", NAVEGADORES)
     assert ler(arquivo) == ("firefox", "default")
@@ -82,8 +84,8 @@ def test_desativar_apaga_o_perfil_junto(arquivo):
 
 
 def test_perfil_com_caminho_do_windows_nao_vira_escape(arquivo):
-    escrever(arquivo, "chrome", "C:\\Users\\Pichau\\Perfil \"2\"", NAVEGADORES)
-    assert ler(arquivo)[1] == "C:\\Users\\Pichau\\Perfil \"2\""
+    escrever(arquivo, "chrome", 'C:\\Users\\Pichau\\Perfil "2"', NAVEGADORES)
+    assert ler(arquivo)[1] == 'C:\\Users\\Pichau\\Perfil "2"'
 
 
 def test_escrita_e_atomica_e_nao_deixa_temporario(arquivo):

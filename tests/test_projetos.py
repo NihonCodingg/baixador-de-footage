@@ -13,13 +13,18 @@ from src.domain.projetos import Projeto, carregar_projetos
 
 
 def test_carrega_dois_projetos():
-    p = carregar_projetos({"projetos": {
-        "pessoal": {"nome": "Canal pessoal", "pasta": "D:/FOOTAGE/pessoal"},
-        "cliente_x": {"nome": "Cliente X", "pasta": "D:/FOOTAGE/cliente_x"},
-    }})
+    p = carregar_projetos(
+        {
+            "projetos": {
+                "pessoal": {"nome": "Canal pessoal", "pasta": "D:/FOOTAGE/pessoal"},
+                "cliente_x": {"nome": "Cliente X", "pasta": "D:/FOOTAGE/cliente_x"},
+            }
+        }
+    )
     assert set(p) == {"pessoal", "cliente_x"}
-    assert p["pessoal"] == Projeto(nome="pessoal", rotulo="Canal pessoal",
-                                   pasta="D:/FOOTAGE/pessoal")
+    assert p["pessoal"] == Projeto(
+        nome="pessoal", rotulo="Canal pessoal", pasta="D:/FOOTAGE/pessoal"
+    )
 
 
 def test_rotulo_ausente_usa_a_chave():
@@ -53,6 +58,7 @@ def test_carrega_o_arquivo_real():
     """Lê config/projetos.yaml de verdade: editar o arquivo quebra o teste."""
     from pathlib import Path
     import yaml
+
     raiz = Path(__file__).resolve().parent.parent
     dados = yaml.safe_load((raiz / "config" / "projetos.yaml").read_text(encoding="utf-8"))
     p = carregar_projetos(dados)

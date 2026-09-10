@@ -29,9 +29,9 @@ from src.domain.nomes import (
 )
 
 # Dados do vídeo real capturado pelo spike (spike_meta.json).
-VIDEO_ID = "LzS8kB6lIm0"          # 11 caracteres, como todo id do YouTube
-DATA = "20260901"                 # 8 caracteres
-EXT = ".mp4"                      # 4 caracteres
+VIDEO_ID = "LzS8kB6lIm0"  # 11 caracteres, como todo id do YouTube
+DATA = "20260901"  # 8 caracteres
+EXT = ".mp4"  # 4 caracteres
 
 # Custo fixo do template, fora a pasta (SPEC 8.3):
 #   com data:  1 + 8 + 3 + 2 + 11 + 1 + 4 = 30
@@ -64,6 +64,7 @@ def existe_falso(*caminhos):
 # GRUPO 1 — Mapeamento de caracteres proibidos (SPEC 8.2, regra 2)
 # ===========================================================================
 
+
 def test_1_1_pipe_vira_separador_com_espacos():
     assert sanitizar("Gameplay|Rush B") == "Gameplay - Rush B"
 
@@ -83,8 +84,10 @@ def test_1_4_barra_invertida_igual_a_barra():
 
 def test_1_5_dois_pontos_vira_espaco_e_colapsa():
     """Título real do spike_meta.json."""
-    assert (sanitizar("Camisa azul da Seleção: críticas ao design")
-            == "Camisa azul da Seleção críticas ao design")
+    assert (
+        sanitizar("Camisa azul da Seleção: críticas ao design")
+        == "Camisa azul da Seleção críticas ao design"
+    )
 
 
 def test_1_6_dois_pontos_sem_espaco_nao_cola_palavras():
@@ -117,11 +120,15 @@ def test_1_10_acentos_sao_preservados():
 # GRUPO 2 — Nomes reservados do DOS (SPEC 8.2, regra 5)
 # ===========================================================================
 
+
+# Tabela protegida do formatador: espelha as famílias de NOMES_RESERVADOS.
+# fmt: off
 @pytest.mark.parametrize("nome", [
     "CON", "PRN", "AUX", "NUL",
     "COM1", "COM5", "COM9",
     "LPT1", "LPT5", "LPT9",
 ])
+# fmt: on
 def test_2_1_reservados_sao_detectados(nome):
     assert e_reservado(nome) is True
     assert aplicar_reservado(nome) == nome + "_"
@@ -139,10 +146,13 @@ def test_2_3_deteccao_e_case_insensitive(nome):
     assert e_reservado(nome) is True
 
 
+# Tabela protegida do formatador: linha 1 são prefixos parecidos, linha 2 são números fora da faixa.
+# fmt: off
 @pytest.mark.parametrize("nome", [
     "CONS", "CONTRA", "CONSOLE", "NULO", "AUXILIAR", "PRNT",
     "COM10", "COM0", "LPT0", "LPT10", "COM", "LPT",
 ])
+# fmt: on
 def test_2_4_nao_reservados_ficam_intactos(nome):
     """O caso de MAIOR valor do grupo.
 
@@ -189,10 +199,13 @@ def test_3_5_titulo_que_contem_a_palavra_video_nao_e_fallback():
             == f"{DATA} - video da final [{VIDEO_ID}]{EXT}")
 
 
+# Tabela protegida do formatador: uma linha de casos válidos, uma de inválidos.
+# fmt: off
 @pytest.mark.parametrize("texto,esperado", [
     ("abc", True), ("123", True), ("á", True), ("日本", True),
     ("", False), ("   ", False), ("...", False), ("🎮", False), ("-_-", False),
 ])
+# fmt: on
 def test_3_4_tem_alfanumerico(texto, esperado):
     assert tem_alfanumerico(texto) is esperado
 

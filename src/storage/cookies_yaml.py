@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 
-MODELO = '''\
+MODELO = """\
 # De onde tirar os cookies do navegador (o --cookies-from-browser do yt-dlp).
 #
 # ATENÇÃO: este arquivo é REESCRITO quando a opção é mudada pela tela, em
@@ -44,7 +44,7 @@ MODELO = '''\
 
 navegador: {navegador}
 perfil: {perfil}
-'''
+"""
 
 
 def _escalar(valor: str | None) -> str:
@@ -73,8 +73,9 @@ def ler(caminho: Path) -> tuple[str | None, str | None]:
     return navegador, perfil
 
 
-def escrever(caminho: Path, navegador: str | None, perfil: str | None,
-             suportados: list[str]) -> None:
+def escrever(
+    caminho: Path, navegador: str | None, perfil: str | None, suportados: list[str]
+) -> None:
     """Reescreve o arquivo a partir do modelo. Gravação atômica."""
     texto = MODELO.format(
         suportados=", ".join(suportados),
@@ -83,9 +84,15 @@ def escrever(caminho: Path, navegador: str | None, perfil: str | None,
     )
     caminho = Path(caminho)
     caminho.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n",
-                                     dir=caminho.parent, delete=False,
-                                     prefix=caminho.name, suffix=".tmp") as saida:
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        newline="\n",
+        dir=caminho.parent,
+        delete=False,
+        prefix=caminho.name,
+        suffix=".tmp",
+    ) as saida:
         saida.write(texto)
         temporario = Path(saida.name)
     os.replace(temporario, caminho)

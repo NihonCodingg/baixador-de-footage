@@ -43,6 +43,7 @@ def embrulhar(original: Exception, msg: str = "ERROR: algo") -> DownloadError:
 # desembrulhar — o coração do ticket (RESEARCH 6.2)
 # ===========================================================================
 
+
 def test_desembrulha_a_excecao_original_do_download_error():
     geo = GeoRestrictedError("bloqueado", countries=["BR"])
     assert desembrulhar(embrulhar(geo)) is geo
@@ -69,6 +70,7 @@ def test_desembrulha_aninhado_ate_o_fundo():
 # ===========================================================================
 # Classificação por TIPO — confiável
 # ===========================================================================
+
 
 def test_geo_restrito_por_tipo_e_preserva_paises():
     c = classificar(embrulhar(GeoRestrictedError("bloqueado", countries=["US", "GB"])))
@@ -121,18 +123,28 @@ def test_erro_de_sistema_de_arquivos_e_disco(erro):
 # Origem de cada string: RESEARCH 6.3
 # ===========================================================================
 
-@pytest.mark.parametrize("mensagem,motivo", [
-    ("Private video", MotivoFalha.PRIVADO),
-    ("Video unavailable", MotivoFalha.INDISPONIVEL),
-    ("This video is age-restricted; some formats may be missing", MotivoFalha.RESTRICAO_IDADE),
-    ("Sign in to confirm your age", MotivoFalha.RESTRICAO_IDADE),
-    ("This video is only available for registered users", MotivoFalha.RESTRICAO_IDADE),
-    ("This video is DRM protected", MotivoFalha.DRM),
-    ("This content isn't available, try again later", MotivoFalha.RATE_LIMIT),
-    ("You have requested merging of multiple formats but ffmpeg is not installed", MotivoFalha.SEM_FFMPEG),
-    ("ffmpeg not found. Please install or provide the path using --ffmpeg-location", MotivoFalha.SEM_FFMPEG),
-    ("ffprobe and ffmpeg not found. Please install", MotivoFalha.SEM_FFMPEG),
-])
+
+@pytest.mark.parametrize(
+    "mensagem,motivo",
+    [
+        ("Private video", MotivoFalha.PRIVADO),
+        ("Video unavailable", MotivoFalha.INDISPONIVEL),
+        ("This video is age-restricted; some formats may be missing", MotivoFalha.RESTRICAO_IDADE),
+        ("Sign in to confirm your age", MotivoFalha.RESTRICAO_IDADE),
+        ("This video is only available for registered users", MotivoFalha.RESTRICAO_IDADE),
+        ("This video is DRM protected", MotivoFalha.DRM),
+        ("This content isn't available, try again later", MotivoFalha.RATE_LIMIT),
+        (
+            "You have requested merging of multiple formats but ffmpeg is not installed",
+            MotivoFalha.SEM_FFMPEG,
+        ),
+        (
+            "ffmpeg not found. Please install or provide the path using --ffmpeg-location",
+            MotivoFalha.SEM_FFMPEG,
+        ),
+        ("ffprobe and ffmpeg not found. Please install", MotivoFalha.SEM_FFMPEG),
+    ],
+)
 def test_mensagens_reais_do_yt_dlp(mensagem, motivo):
     c = classificar(embrulhar(ExtractorError(mensagem, expected=True)))
     assert c.motivo is motivo, f"{mensagem!r} -> {c.motivo}"
@@ -145,8 +157,9 @@ def test_classificacao_por_mensagem_ignora_caixa():
 
 def test_drm_vence_quando_a_mensagem_tambem_diz_unavailable():
     """Ordem da tabela: o motivo mais específico vem primeiro."""
-    c = classificar(embrulhar(ExtractorError(
-        "Video unavailable. This video is DRM protected", expected=True)))
+    c = classificar(
+        embrulhar(ExtractorError("Video unavailable. This video is DRM protected", expected=True))
+    )
     assert c.motivo is MotivoFalha.DRM
 
 
@@ -163,6 +176,7 @@ def test_post_processing_error_de_ffmpeg():
 # ===========================================================================
 # O fallback — nunca "erro desconhecido" sem a mensagem original
 # ===========================================================================
+
 
 def test_desconhecido_preserva_a_mensagem_original():
     c = classificar(embrulhar(ExtractorError("Something new the site invented", expected=True)))
@@ -205,6 +219,7 @@ def test_excecao_sem_texto_nao_gera_mensagem_vazia():
 # ===========================================================================
 # Retry e o embrulho final
 # ===========================================================================
+
 
 @pytest.mark.parametrize("motivo", list(MotivoFalha))
 def test_retentavel_bate_com_a_tabela_do_dominio(motivo):
@@ -251,10 +266,12 @@ def test_classificacao_e_imutavel():
 # ===========================================================================
 
 # Repare no apóstrofo: é U+2019, não o ASCII. Casar por "you're" falharia.
-BOT = ("Sign in to confirm you’re not a bot. Use --cookies-from-browser or "
-       "--cookies for the authentication. See  "
-       "https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  "
-       "for how to manually pass cookies.")
+BOT = (
+    "Sign in to confirm you’re not a bot. Use --cookies-from-browser or "
+    "--cookies for the authentication. See  "
+    "https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  "
+    "for how to manually pass cookies."
+)
 
 
 def test_bloqueio_antibot_tem_motivo_proprio():
@@ -277,22 +294,28 @@ def test_bloqueio_antibot_nao_e_retentavel():
     assert classificar(ExtractorError(BOT)).retentavel is False
 
 
-@pytest.mark.parametrize("texto", [
-    "This video is unavailable",          # a forma que estava escapando
-    "Video unavailable",
-])
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "This video is unavailable",  # a forma que estava escapando
+        "Video unavailable",
+    ],
+)
 def test_video_indisponivel_nas_duas_formas(texto):
-    """"This video is unavailable" não casa com a substring "video
+    """ "This video is unavailable" não casa com a substring "video
     unavailable" — o "is" no meio quebra. Caía em DESCONHECIDO."""
     assert classificar(ExtractorError(texto)).motivo is MotivoFalha.INDISPONIVEL
 
 
-@pytest.mark.parametrize("texto", [
-    "Could not copy Chrome cookie database. See  https://github.com/...  for more info",
-    "Failed to decrypt with DPAPI. See  https://github.com/...  for more info",
-    "unknown browser: naoexiste",
-    "unsupported platform: win32",
-])
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "Could not copy Chrome cookie database. See  https://github.com/...  for more info",
+        "Failed to decrypt with DPAPI. See  https://github.com/...  for more info",
+        "unknown browser: naoexiste",
+        "unsupported platform: win32",
+    ],
+)
 def test_falha_de_cookie_tem_motivo_proprio(texto):
     """Os quatro caminhos de falha de leitura de cookie, todos medidos no
     yt-dlp instalado. Sem isto o usuário via texto cru em inglês."""

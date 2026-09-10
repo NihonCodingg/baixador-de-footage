@@ -17,16 +17,29 @@ from src.queue.fila import Fila
 
 
 def video(video_id="LzS8kB6lIm0") -> Video:
-    return Video(video_id=video_id, extractor="Youtube",
-                 url_canonica=f"https://www.youtube.com/watch?v={video_id}",
-                 titulo="t", canal=None, duracao_s=None, thumbnail_url=None,
-                 data_upload=None, formatos=())
+    return Video(
+        video_id=video_id,
+        extractor="Youtube",
+        url_canonica=f"https://www.youtube.com/watch?v={video_id}",
+        titulo="t",
+        canal=None,
+        duracao_s=None,
+        thumbnail_url=None,
+        data_upload=None,
+        formatos=(),
+    )
 
 
 def job(video_id="LzS8kB6lIm0", id_="j1") -> Job:
-    return Job(id=id_, video=video(video_id), perfil="edicao_1080", projeto="p",
-               estado=EstadoJob.NA_FILA, criado_em=datetime(2026, 9, 2),
-               url_original="u")
+    return Job(
+        id=id_,
+        video=video(video_id),
+        perfil="edicao_1080",
+        projeto="p",
+        estado=EstadoJob.NA_FILA,
+        criado_em=datetime(2026, 9, 2),
+        url_original="u",
+    )
 
 
 def prog(baixados=1, total=10):
@@ -36,6 +49,7 @@ def prog(baixados=1, total=10):
 # ===========================================================================
 # adicionar / proximo — FIFO
 # ===========================================================================
+
 
 def test_adicionar_devolve_o_id_e_deixa_na_fila():
     f = Fila()
@@ -101,6 +115,7 @@ def test_proximo_bloqueia_ate_chegar_um_job():
 # Cancelamento (SPEC 10.5)
 # ===========================================================================
 
+
 def test_cancelar_na_fila():
     f = Fila()
     f.adicionar(job())
@@ -133,6 +148,7 @@ def test_cancelar_inexistente_e_false():
 # ===========================================================================
 # Transições
 # ===========================================================================
+
 
 def test_transicionar_ilegal_levanta_e_nao_muda():
     f = Fila()
@@ -195,6 +211,7 @@ def test_interromper_sem_nada_em_andamento():
 # Progresso — o hook pode vir de outra thread
 # ===========================================================================
 
+
 def test_atualizar_progresso_substitui_o_objeto():
     f = Fila()
     f.adicionar(job())
@@ -233,7 +250,7 @@ def test_progresso_concorrente_de_varias_threads():
             for i in range(300):
                 f.atualizar_progresso("j1", prog(i, 1000))
                 f.instantaneo()
-        except Exception as e:      # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             erros.append(e)
 
     ts = [threading.Thread(target=bater) for _ in range(4)]
@@ -249,6 +266,7 @@ def test_progresso_concorrente_de_varias_threads():
 # ===========================================================================
 # instantaneo / obter — cópias, não referências
 # ===========================================================================
+
 
 def test_instantaneo_devolve_copias():
     f = Fila()
@@ -279,6 +297,7 @@ def test_instantaneo_preserva_ordem_de_chegada():
 # ===========================================================================
 # ETAPA 2 — aviso no job (decisoes 1, 4 e 5) e ja_existia (decisao 1)
 # ===========================================================================
+
 
 def test_avisar_grava_no_job_sem_mudar_o_estado():
     f = Fila()

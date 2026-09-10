@@ -23,11 +23,9 @@ from .domain.erros import LinkInvalido, ProjetoInvalido
 from .domain.models import EstadoJob, Job, Video, tem_audio, tem_video
 from .domain.nomes import montar_caminho, resolver_colisao
 from .domain.perfis import carregar_perfis, disponivel, opcoes_ytdlp
-from .domain.projetos import (NOME_AVULSO, Projeto, carregar_projetos,
-                              validar_nome)
+from .domain.projetos import NOME_AVULSO, Projeto, carregar_projetos, validar_nome
 from .domain.validacao import normalizar_link, normalizar_lote
-from .download.adapter import (NAVEGADORES, Downloader, testar_cookies,
-                               validar_seletor)
+from .download.adapter import NAVEGADORES, Downloader, testar_cookies, validar_seletor
 from .download.ffmpeg import detectar
 from .download.traducao_erros import ErroDeDownload
 from .queue.fila import Fila
@@ -57,14 +55,14 @@ def abrir_no_sistema(caminho: str) -> None:
     pedido é abrir a pasta.
     """
     if sys.platform == "win32":
-        os.startfile(caminho)                                 # noqa: S606
+        os.startfile(caminho)  # noqa: S606
     elif sys.platform == "darwin":
-        subprocess.run(["open", caminho], check=False)        # noqa: S603,S607
+        subprocess.run(["open", caminho], check=False)  # noqa: S603,S607
     else:
-        subprocess.run(["xdg-open", caminho], check=False)    # noqa: S603,S607
+        subprocess.run(["xdg-open", caminho], check=False)  # noqa: S603,S607
 
 
-ESPERA_SELETOR = 180.0          # segundos até desistir do diálogo aberto
+ESPERA_SELETOR = 180.0  # segundos até desistir do diálogo aberto
 
 
 def escolher_pasta_no_sistema(espera: float = ESPERA_SELETOR) -> str | None:
@@ -81,23 +79,29 @@ def escolher_pasta_no_sistema(espera: float = ESPERA_SELETOR) -> str | None:
     que o SPEC garante ao vincular em 127.0.0.1.
     """
     try:
-        concluido = subprocess.run(                       # noqa: S603
+        concluido = subprocess.run(  # noqa: S603
             [sys.executable, "-m", "src.seletor_pasta"],
-            capture_output=True, text=True, encoding="utf-8",
-            timeout=espera, cwd=str(Path(__file__).resolve().parent.parent))
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=espera,
+            cwd=str(Path(__file__).resolve().parent.parent),
+        )
     except subprocess.TimeoutExpired as erro:
         raise EntradaInvalida(
             "O seletor de pasta ficou aberto tempo demais e foi fechado. "
-            "Tente de novo, ou cole o caminho no campo.") from erro
+            "Tente de novo, ou cole o caminho no campo."
+        ) from erro
     except OSError as erro:
         raise EntradaInvalida(
-            f"Não foi possível abrir o seletor de pasta: {erro}. "
-            "Cole o caminho no campo.") from erro
+            f"Não foi possível abrir o seletor de pasta: {erro}. Cole o caminho no campo."
+        ) from erro
 
     if concluido.returncode != 0:
         raise EntradaInvalida(
             "O seletor de pasta falhou. Cole o caminho no campo. "
-            f"Detalhe: {(concluido.stderr or '').strip()[:200]}")
+            f"Detalhe: {(concluido.stderr or '').strip()[:200]}"
+        )
     escolhido = (concluido.stdout or "").strip()
     return escolhido or None
 
@@ -119,29 +123,38 @@ class Conflito(ErroDePedido):
 
 
 class Pipeline:
-    def __init__(self, config_dir: Path, data_dir: Path, *,
-                 downloader=None, detectar_ffmpeg: Callable | None = None,
-                 abrir_no_explorador: Callable[[str], None] | None = None,
-                 escolher_pasta: Callable[[], str | None] | None = None,
-                 testar_cookies_de: Callable[..., str | None] | None = None):
+    def __init__(
+        self,
+        config_dir: Path,
+        data_dir: Path,
+        *,
+        downloader=None,
+        detectar_ffmpeg: Callable | None = None,
+        abrir_no_explorador: Callable[[str], None] | None = None,
+        escolher_pasta: Callable[[], str | None] | None = None,
+        testar_cookies_de: Callable[..., str | None] | None = None,
+    ):
         """Carrega perfis e projetos, detecta o ffmpeg, abre o histórico e
         reconcilia os interrompidos (SPEC 10.1), sobe o worker."""
         self._config_dir = Path(config_dir)
         self._data_dir = Path(data_dir)
         # Cookies ANTES do downloader: é ele que carrega a opção.
         self._cookies_nav, self._cookies_perfil = cookies_yaml.ler(
-            self._config_dir / "cookies.yaml")
+            self._config_dir / "cookies.yaml"
+        )
         self._cookies_motivo = None
         if self._cookies_nav and self._cookies_nav not in NAVEGADORES:
             # Não estoura: cookies são acessório. Fica desligado, e a tela
             # mostra por quê.
             self._cookies_motivo = (
                 f"O navegador {self._cookies_nav!r} do config/cookies.yaml não é "
-                f"suportado pelo yt-dlp. Cookies desligados.")
+                f"suportado pelo yt-dlp. Cookies desligados."
+            )
             self._cookies_nav = None
 
         self._downloader = downloader or Downloader(
-            cookies=(self._cookies_nav, self._cookies_perfil))
+            cookies=(self._cookies_nav, self._cookies_perfil)
+        )
         self._ffmpeg = (detectar_ffmpeg or detectar)()
         # Injetados para o teste não abrir janela nenhuma.
         self._abrir = abrir_no_explorador or abrir_no_sistema
@@ -149,11 +162,11 @@ class Pipeline:
         self._testar_cookies = testar_cookies_de or testar_cookies
 
         self._perfis = carregar_perfis(
-            self._ler_yaml("perfis.yaml"), validar_seletor=validar_seletor)
+            self._ler_yaml("perfis.yaml"), validar_seletor=validar_seletor
+        )
         self._projetos = carregar_projetos(self._ler_yaml("projetos.yaml"))
         self._projetos_status = {
-            nome: self._checar_pasta(projeto)
-            for nome, projeto in self._projetos.items()
+            nome: self._checar_pasta(projeto) for nome, projeto in self._projetos.items()
         }
 
         self._historico = Historico(self._data_dir / "historico.db")
@@ -164,14 +177,13 @@ class Pipeline:
 
         self._fila = Fila()
         self._cache_lock = threading.Lock()
-        self._videos: dict[str, Video] = {}        # url -> Video, da inspeção
-        self._avisos: dict[str, str] = {}          # job_id -> aviso do preparo
+        self._videos: dict[str, Video] = {}  # url -> Video, da inspeção
+        self._avisos: dict[str, str] = {}  # job_id -> aviso do preparo
         # job_id -> destino avulso. Vive aqui e não no Job porque é uma pasta
         # de UMA execução: o domínio não precisa saber que ela existe.
         self._destinos: dict[str, Projeto] = {}
 
-        self._worker = Worker(self._fila, self._downloader, self._historico,
-                              self._preparar)
+        self._worker = Worker(self._fila, self._downloader, self._historico, self._preparar)
         self._worker.iniciar()
         self._encerrado = False
 
@@ -225,8 +237,9 @@ class Pipeline:
                 continue
             if not existe:
                 continue
-            self._historico.avisar(registro.id, AVISO_INTERROMPIDO.format(
-                tamanho=tamanho, caminho=registro.caminho))
+            self._historico.avisar(
+                registro.id, AVISO_INTERROMPIDO.format(tamanho=tamanho, caminho=registro.caminho)
+            )
 
     # ---------------------------------------------------------- inspeção
 
@@ -283,7 +296,7 @@ class Pipeline:
                     "altura": f.altura,
                     "fps": f.fps,
                     "vcodec": f.vcodec,
-                    "acodec": f.acodec,          # None = desconhecido, não ausente
+                    "acodec": f.acodec,  # None = desconhecido, não ausente
                     "tem_video": tem_video(f),
                     "tem_audio": tem_audio(f),
                     "tbr": f.tbr,
@@ -302,26 +315,40 @@ class Pipeline:
         itens: list[dict] = []
         for link in normalizar_lote(texto_links):
             if not link.ok:
-                itens.append({"ok": False, "original": link.original,
-                              "url": None, "erro": link.erro,
-                              "motivo": "link_invalido"})
+                itens.append(
+                    {
+                        "ok": False,
+                        "original": link.original,
+                        "url": None,
+                        "erro": link.erro,
+                        "motivo": "link_invalido",
+                    }
+                )
                 continue
             try:
                 video = self._obter_video(link.url)
             except ErroDeDownload as erro:
-                itens.append({"ok": False, "original": link.original,
-                              "url": link.url, "erro": erro.classificacao.mensagem,
-                              "motivo": erro.motivo.value})
+                itens.append(
+                    {
+                        "ok": False,
+                        "original": link.original,
+                        "url": link.url,
+                        "erro": erro.classificacao.mensagem,
+                        "motivo": erro.motivo.value,
+                    }
+                )
                 continue
-            itens.append({
-                "ok": True,
-                "original": link.original,
-                "url": link.url,
-                "e_youtube": link.e_youtube,
-                "aviso": link.aviso,
-                "video": self._video_dict(video),
-                "baixados": self._baixados(video),
-            })
+            itens.append(
+                {
+                    "ok": True,
+                    "original": link.original,
+                    "url": link.url,
+                    "e_youtube": link.e_youtube,
+                    "aviso": link.aviso,
+                    "video": self._video_dict(video),
+                    "baixados": self._baixados(video),
+                }
+            )
         return itens
 
     # ------------------------------------------------------------- fila
@@ -335,9 +362,14 @@ class Pipeline:
             for j in self._fila.instantaneo()
         )
 
-    def enfileirar(self, urls: list[str], perfil: str,
-                   projeto: str | None = None, forcar: bool = False,
-                   pasta: str | None = None) -> list[str]:
+    def enfileirar(
+        self,
+        urls: list[str],
+        perfil: str,
+        projeto: str | None = None,
+        forcar: bool = False,
+        pasta: str | None = None,
+    ) -> list[str]:
         """Devolve os ids dos jobs. EntradaInvalida / Conflito.
 
         Tudo ou nada: valida todos os links (inclusive duplicatas) antes de
@@ -368,18 +400,24 @@ class Pipeline:
             if ja is not None and not forcar:
                 raise Conflito(
                     f"Já baixado no perfil {perfil!r}: {ja.caminho}. "
-                    f"Use forcar=true para baixar de novo.")
+                    f"Use forcar=true para baixar de novo."
+                )
             if self._na_fila(video, perfil) or any(
-                    j.video.video_id == video.video_id and j.perfil == perfil
-                    for j in jobs):
+                j.video.video_id == video.video_id and j.perfil == perfil for j in jobs
+            ):
                 raise Conflito(f"Este vídeo já está na fila no perfil {perfil!r}.")
 
-            jobs.append(Job(
-                id=uuid.uuid4().hex, video=video, perfil=perfil,
-                projeto=destino.nome,
-                estado=EstadoJob.NA_FILA, criado_em=datetime.now(timezone.utc),
-                url_original=link.original,
-            ))
+            jobs.append(
+                Job(
+                    id=uuid.uuid4().hex,
+                    video=video,
+                    perfil=perfil,
+                    projeto=destino.nome,
+                    estado=EstadoJob.NA_FILA,
+                    criado_em=datetime.now(timezone.utc),
+                    url_original=link.original,
+                )
+            )
 
         if pasta:
             with self._cache_lock:
@@ -387,8 +425,7 @@ class Pipeline:
                     self._destinos[job.id] = destino
         return [self._fila.adicionar(job) for job in jobs]
 
-    def _validar_destino(self, perfil: str, projeto: str | None,
-                         pasta: str | None = None):
+    def _validar_destino(self, perfil: str, projeto: str | None, pasta: str | None = None):
         """Perfil e destino existem, estão disponíveis e são válidos.
 
         Fatorado porque `enfileirar` e `simular` precisam exatamente da mesma
@@ -401,16 +438,15 @@ class Pipeline:
             raise EntradaInvalida(f"Perfil {perfil!r} não existe.")
         if not disponivel(definicao, self._ffmpeg.disponivel):
             raise EntradaInvalida(
-                f"O perfil {perfil!r} exige ffmpeg, que não foi encontrado no PATH.")
+                f"O perfil {perfil!r} exige ffmpeg, que não foi encontrado no PATH."
+            )
 
         if projeto and pasta:
-            raise EntradaInvalida(
-                "Informe um projeto OU uma pasta avulsa, não os dois.")
+            raise EntradaInvalida("Informe um projeto OU uma pasta avulsa, não os dois.")
         if pasta:
             return definicao, self._destino_avulso(pasta)
         if not projeto:
-            raise EntradaInvalida(
-                "Informe o projeto de destino, ou uma pasta avulsa.")
+            raise EntradaInvalida("Informe o projeto de destino, ou uma pasta avulsa.")
         if projeto not in self._projetos:
             raise EntradaInvalida(f"Projeto {projeto!r} não existe.")
         valido, motivo = self._projetos_status[projeto]
@@ -440,12 +476,17 @@ class Pipeline:
         --dry-run existe justamente para conferir o nome antes de gravar.
         """
         montado = montar_caminho(
-            projeto.pasta, video.titulo, video.video_id,
-            video.data_upload, "." + perfil.merge_output_format)
+            projeto.pasta,
+            video.titulo,
+            video.video_id,
+            video.data_upload,
+            "." + perfil.merge_output_format,
+        )
         return resolver_colisao(montado.caminho, os.path.exists), montado.aviso
 
-    def simular(self, urls: list[str], perfil: str,
-                projeto: str | None = None, pasta: str | None = None) -> list[dict]:
+    def simular(
+        self, urls: list[str], perfil: str, projeto: str | None = None, pasta: str | None = None
+    ) -> list[dict]:
         """O que `enfileirar` faria, sem baixar nada e sem criar pasta.
 
         Alimenta o `--dry-run` da CLI. Consulta os metadados (é de onde sai o
@@ -464,29 +505,44 @@ class Pipeline:
             try:
                 link = normalizar_link(url)
             except LinkInvalido as erro:
-                itens.append({"ok": False, "original": url, "url": None,
-                              "erro": str(erro), "motivo": "link_invalido"})
+                itens.append(
+                    {
+                        "ok": False,
+                        "original": url,
+                        "url": None,
+                        "erro": str(erro),
+                        "motivo": "link_invalido",
+                    }
+                )
                 continue
             try:
                 video = self._obter_video(link.url)
             except ErroDeDownload as erro:
-                itens.append({"ok": False, "original": url, "url": link.url,
-                              "erro": erro.classificacao.mensagem,
-                              "motivo": erro.motivo.value})
+                itens.append(
+                    {
+                        "ok": False,
+                        "original": url,
+                        "url": link.url,
+                        "erro": erro.classificacao.mensagem,
+                        "motivo": erro.motivo.value,
+                    }
+                )
                 continue
 
             caminho, aviso_nome = self._destino(video, definicao, destino_projeto)
             ja = self._historico.ja_baixado(video.extractor, video.video_id, perfil)
-            itens.append({
-                "ok": True,
-                "original": url,
-                "url": link.url,
-                "e_youtube": link.e_youtube,
-                "aviso": " | ".join(x for x in (link.aviso, aviso_nome) if x) or None,
-                "video": self._video_dict(video),
-                "destino": caminho,
-                "ja_baixado": asdict(ja) if ja is not None else None,
-            })
+            itens.append(
+                {
+                    "ok": True,
+                    "original": url,
+                    "url": link.url,
+                    "e_youtube": link.e_youtube,
+                    "aviso": " | ".join(x for x in (link.aviso, aviso_nome) if x) or None,
+                    "video": self._video_dict(video),
+                    "destino": caminho,
+                    "ja_baixado": asdict(ja) if ja is not None else None,
+                }
+            )
         return itens
 
     def _preparar(self, job: Job) -> Preparacao:
@@ -557,14 +613,14 @@ class Pipeline:
         if self._fila.obter(job_id) is None:
             raise NaoEncontrado(f"Job {job_id!r} não existe.")
         if not self._fila.cancelar(job_id):
-            raise Conflito(
-                "Só é possível cancelar um job que ainda não começou (SPEC 10.5).")
+            raise Conflito("Só é possível cancelar um job que ainda não começou (SPEC 10.5).")
         return True
 
     # --------------------------------------------------------- consultas
 
-    def historico(self, termo: str | None = None, projeto: str | None = None,
-                  limite: int = 100) -> list[dict]:
+    def historico(
+        self, termo: str | None = None, projeto: str | None = None, limite: int = 100
+    ) -> list[dict]:
         return [asdict(r) for r in self._historico.buscar(termo, projeto, limite)]
 
     # -------------------------------------------------- projetos na tela
@@ -601,8 +657,13 @@ class Pipeline:
 
     def _projeto_dict(self, projeto: Projeto) -> dict:
         valido, motivo = self._projetos_status[projeto.nome]
-        return {"nome": projeto.nome, "rotulo": projeto.rotulo,
-                "pasta": projeto.pasta, "valido": valido, "motivo": motivo}
+        return {
+            "nome": projeto.nome,
+            "rotulo": projeto.rotulo,
+            "pasta": projeto.pasta,
+            "valido": valido,
+            "motivo": motivo,
+        }
 
     def projetos(self) -> list[dict]:
         return [self._projeto_dict(p) for p in self._projetos.values()]
@@ -610,35 +671,36 @@ class Pipeline:
     def _recarregar_projetos(self) -> None:
         self._projetos = carregar_projetos(self._ler_yaml("projetos.yaml"))
         self._projetos_status = {
-            nome: self._checar_pasta(projeto)
-            for nome, projeto in self._projetos.items()
+            nome: self._checar_pasta(projeto) for nome, projeto in self._projetos.items()
         }
 
-    def adicionar_projeto(self, nome: str, caminho: str,
-                          rotulo: str | None = None) -> dict:
+    def adicionar_projeto(self, nome: str, caminho: str, rotulo: str | None = None) -> dict:
         """Cadastra e grava no projetos.yaml. EntradaInvalida / Conflito."""
         try:
             nome = validar_nome(nome)
         except ProjetoInvalido as erro:
             raise EntradaInvalida(str(erro)) from erro
 
-        existente = next((n for n in self._projetos if n.casefold() == nome.casefold()),
-                         None)
+        existente = next((n for n in self._projetos if n.casefold() == nome.casefold()), None)
         if existente is not None:
             raise Conflito(
                 f"Já existe um projeto chamado {existente!r}. "
-                "Escolha outro nome ou remova o antigo.")
+                "Escolha outro nome ou remova o antigo."
+            )
 
         alvo, erro = self._checar_destino_novo(caminho)
         if erro:
             raise EntradaInvalida(f"Pasta inválida: {erro}")
 
         try:
-            projetos_yaml.adicionar(self._config_dir / "projetos.yaml",
-                                    nome, (rotulo or nome).strip() or nome, str(alvo))
+            projetos_yaml.adicionar(
+                self._config_dir / "projetos.yaml",
+                nome,
+                (rotulo or nome).strip() or nome,
+                str(alvo),
+            )
         except Exception as erro:  # noqa: BLE001
-            raise EntradaInvalida(
-                f"Não foi possível gravar em projetos.yaml: {erro}") from erro
+            raise EntradaInvalida(f"Não foi possível gravar em projetos.yaml: {erro}") from erro
 
         self._recarregar_projetos()
         return self._projeto_dict(self._projetos[nome])
@@ -652,12 +714,14 @@ class Pipeline:
         """
         if nome not in self._projetos:
             raise NaoEncontrado(f"Projeto {nome!r} não existe.")
-        ativo = next((j for j in self._fila.instantaneo()
-                      if j.projeto == nome and j.estado in _ATIVOS), None)
+        ativo = next(
+            (j for j in self._fila.instantaneo() if j.projeto == nome and j.estado in _ATIVOS), None
+        )
         if ativo is not None:
             raise Conflito(
                 f"O projeto {nome!r} tem download em andamento ou na fila. "
-                "Espere terminar para removê-lo.")
+                "Espere terminar para removê-lo."
+            )
         try:
             projetos_yaml.remover(self._config_dir / "projetos.yaml", nome)
         except Exception as erro:  # noqa: BLE001
@@ -706,11 +770,11 @@ class Pipeline:
         if self._dentro_de_projeto(alvo) is None:
             raise EntradaInvalida(
                 "Só é possível abrir pastas dentro de um projeto configurado. "
-                f"Fora de todos eles: {caminho}")
+                f"Fora de todos eles: {caminho}"
+            )
 
         if not alvo.exists():
-            raise EntradaInvalida(
-                f"O caminho não existe mais no disco: {caminho}")
+            raise EntradaInvalida(f"O caminho não existe mais no disco: {caminho}")
 
         pasta = alvo if alvo.is_dir() else alvo.parent
         self._abrir(str(pasta))
@@ -728,8 +792,7 @@ class Pipeline:
             "navegadores": list(NAVEGADORES),
         }
 
-    def definir_cookies(self, navegador: str | None,
-                        perfil: str | None = None) -> dict:
+    def definir_cookies(self, navegador: str | None, perfil: str | None = None) -> dict:
         """Liga ou desliga os cookies do navegador e grava no YAML.
 
         Validar o nome AQUI, contra a lista do yt-dlp instalado, é o que faz a
@@ -740,7 +803,8 @@ class Pipeline:
         if navegador and navegador not in NAVEGADORES:
             raise EntradaInvalida(
                 f"Navegador {navegador!r} não é suportado pelo yt-dlp. "
-                f"Escolha um de: {', '.join(NAVEGADORES)}.")
+                f"Escolha um de: {', '.join(NAVEGADORES)}."
+            )
 
         # Lê os cookies AGORA. Sem isto, a falha só apareceria no meio do
         # próximo download — e chegaria lá como "failed to load cookies", sem
@@ -752,21 +816,21 @@ class Pipeline:
                 raise EntradaInvalida(
                     f"Não foi possível ler os cookies do {navegador}. "
                     f"Feche o navegador e tente de novo; se ele nem estiver "
-                    f"instalado, escolha outro. Detalhe do yt-dlp: {detalhe}")
+                    f"instalado, escolha outro. Detalhe do yt-dlp: {detalhe}"
+                )
 
         try:
-            cookies_yaml.escrever(self._config_dir / "cookies.yaml",
-                                  navegador, perfil, list(NAVEGADORES))
+            cookies_yaml.escrever(
+                self._config_dir / "cookies.yaml", navegador, perfil, list(NAVEGADORES)
+            )
         except OSError as erro:
-            raise EntradaInvalida(
-                f"Não foi possível gravar em cookies.yaml: {erro}") from erro
+            raise EntradaInvalida(f"Não foi possível gravar em cookies.yaml: {erro}") from erro
 
         self._cookies_nav = navegador
         self._cookies_perfil = perfil if navegador else None
         self._cookies_motivo = None
         if hasattr(self._downloader, "definir_cookies"):
-            self._downloader.definir_cookies(
-                (self._cookies_nav, self._cookies_perfil))
+            self._downloader.definir_cookies((self._cookies_nav, self._cookies_perfil))
         # O cache de inspeção guarda metadados obtidos SEM cookies; depois de
         # ligar, uma nova inspeção precisa de fato ir ao site de novo.
         with self._cache_lock:

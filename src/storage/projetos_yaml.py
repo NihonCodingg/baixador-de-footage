@@ -29,7 +29,7 @@ from pathlib import Path
 
 import yaml
 
-INDENTACAO = "  "                     # a chave do projeto vive com 2 espaços
+INDENTACAO = "  "  # a chave do projeto vive com 2 espaços
 _CHAVE = re.compile(r"^ {2}(?P<nome>[^\s:#][^:]*):\s*(?:#.*)?$")
 
 
@@ -53,9 +53,15 @@ def _ler(caminho: Path) -> str:
 
 def _gravar_atomico(caminho: Path, texto: str) -> None:
     pasta = caminho.parent
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", newline="\n",
-                                     dir=pasta, delete=False,
-                                     prefix=caminho.name, suffix=".tmp") as saida:
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        newline="\n",
+        dir=pasta,
+        delete=False,
+        prefix=caminho.name,
+        suffix=".tmp",
+    ) as saida:
         saida.write(texto)
         temporario = Path(saida.name)
     os.replace(temporario, caminho)
@@ -73,7 +79,8 @@ def _conferir(texto: str, esperados: set[str]) -> None:
     if obtidos != esperados:
         raise ConfigInvalida(
             f"a edição mudaria os projetos de forma inesperada: "
-            f"esperado {sorted(esperados)}, obtido {sorted(obtidos)}")
+            f"esperado {sorted(esperados)}, obtido {sorted(obtidos)}"
+        )
 
 
 def nomes(caminho: Path) -> list[str]:
@@ -93,9 +100,11 @@ def adicionar(caminho: Path, nome: str, rotulo: str, pasta: str) -> None:
         texto += "\n"
     if not texto.endswith("\n\n"):
         texto += "\n"
-    bloco = (f"{INDENTACAO}{nome}:\n"
-             f"{INDENTACAO * 2}nome: {_escalar(rotulo)}\n"
-             f"{INDENTACAO * 2}pasta: {_escalar(pasta)}\n")
+    bloco = (
+        f"{INDENTACAO}{nome}:\n"
+        f"{INDENTACAO * 2}nome: {_escalar(rotulo)}\n"
+        f"{INDENTACAO * 2}pasta: {_escalar(pasta)}\n"
+    )
 
     novo = texto + bloco
     _conferir(novo, atuais | {nome})
@@ -117,16 +126,24 @@ def remover(caminho: Path, nome: str) -> None:
     if len(atuais) == 1:
         raise ConfigInvalida(
             "este é o único projeto do arquivo, e a aplicação não sobe sem "
-            "nenhum. Cadastre outro antes de remover este.")
+            "nenhum. Cadastre outro antes de remover este."
+        )
 
     linhas = texto.splitlines(keepends=True)
-    inicio = next((i for i, linha in enumerate(linhas)
-                   if (m := _CHAVE.match(linha.rstrip("\n")))
-                   and m.group("nome").strip().strip("\"'") == nome), None)
+    inicio = next(
+        (
+            i
+            for i, linha in enumerate(linhas)
+            if (m := _CHAVE.match(linha.rstrip("\n")))
+            and m.group("nome").strip().strip("\"'") == nome
+        ),
+        None,
+    )
     if inicio is None:
         raise ConfigInvalida(
             f"o projeto {nome!r} existe no YAML mas não numa forma que este "
-            "editor saiba remover. Edite o arquivo à mão.")
+            "editor saiba remover. Edite o arquivo à mão."
+        )
 
     fim = inicio + 1
     while fim < len(linhas):

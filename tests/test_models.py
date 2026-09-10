@@ -24,25 +24,42 @@ from src.domain.models import (
 
 
 def job_em(estado: EstadoJob) -> Job:
-    video = Video(video_id="LzS8kB6lIm0", extractor="Youtube",
-                  url_canonica="https://www.youtube.com/watch?v=LzS8kB6lIm0",
-                  titulo="t", canal=None, duracao_s=None, thumbnail_url=None,
-                  data_upload=None, formatos=())
-    return Job(id="j1", video=video, perfil="edicao_1080", projeto="p",
-               estado=estado, criado_em=datetime(2026, 9, 1))
+    video = Video(
+        video_id="LzS8kB6lIm0",
+        extractor="Youtube",
+        url_canonica="https://www.youtube.com/watch?v=LzS8kB6lIm0",
+        titulo="t",
+        canal=None,
+        duracao_s=None,
+        thumbnail_url=None,
+        data_upload=None,
+        formatos=(),
+    )
+    return Job(
+        id="j1",
+        video=video,
+        perfil="edicao_1080",
+        projeto="p",
+        estado=estado,
+        criado_em=datetime(2026, 9, 1),
+    )
 
 
 # ===========================================================================
 # GRUPO C — Máquina de estados (SPEC 10.2)
 # ===========================================================================
 
-@pytest.mark.parametrize("origem,destino", [
-    (EstadoJob.NA_FILA, EstadoJob.BAIXANDO),
-    (EstadoJob.NA_FILA, EstadoJob.CANCELADO),
-    (EstadoJob.BAIXANDO, EstadoJob.CONCLUIDO),
-    (EstadoJob.BAIXANDO, EstadoJob.FALHOU),
-    (EstadoJob.BAIXANDO, EstadoJob.INTERROMPIDO),
-])
+
+@pytest.mark.parametrize(
+    "origem,destino",
+    [
+        (EstadoJob.NA_FILA, EstadoJob.BAIXANDO),
+        (EstadoJob.NA_FILA, EstadoJob.CANCELADO),
+        (EstadoJob.BAIXANDO, EstadoJob.CONCLUIDO),
+        (EstadoJob.BAIXANDO, EstadoJob.FALHOU),
+        (EstadoJob.BAIXANDO, EstadoJob.INTERROMPIDO),
+    ],
+)
 def test_c1_transicoes_legais(origem, destino):
     j = job_em(origem)
     j.transicionar(destino)
@@ -77,12 +94,15 @@ def test_c5_mesmo_para_mesmo_estado_e_ilegal(estado):
         job_em(estado).transicionar(estado)
 
 
-@pytest.mark.parametrize("origem,destino", [
-    (EstadoJob.NA_FILA, EstadoJob.CONCLUIDO),
-    (EstadoJob.BAIXANDO, EstadoJob.CANCELADO),
-    (EstadoJob.CONCLUIDO, EstadoJob.BAIXANDO),
-    (EstadoJob.NA_FILA, EstadoJob.NA_FILA),
-])
+@pytest.mark.parametrize(
+    "origem,destino",
+    [
+        (EstadoJob.NA_FILA, EstadoJob.CONCLUIDO),
+        (EstadoJob.BAIXANDO, EstadoJob.CANCELADO),
+        (EstadoJob.CONCLUIDO, EstadoJob.BAIXANDO),
+        (EstadoJob.NA_FILA, EstadoJob.NA_FILA),
+    ],
+)
 def test_c6_estado_nao_muda_quando_a_transicao_falha(origem, destino):
     """Nenhuma função de domínio pode deixar objeto em estado parcial.
 
@@ -99,10 +119,14 @@ def test_c6_estado_nao_muda_quando_a_transicao_falha(origem, destino):
 # Estado parcial — os modelos imutáveis são realmente imutáveis
 # ===========================================================================
 
-@pytest.mark.parametrize("obj", [
-    Formato("1", "mp4", "1x1", 1, 1, None, "avc1", "mp4a", None, None),
-    Progresso(baixados=1, total=2, velocidade_bps=None, eta_s=None),
-])
+
+@pytest.mark.parametrize(
+    "obj",
+    [
+        Formato("1", "mp4", "1x1", 1, 1, None, "avc1", "mp4a", None, None),
+        Progresso(baixados=1, total=2, velocidade_bps=None, eta_s=None),
+    ],
+)
 def test_modelos_de_valor_sao_frozen(obj):
     """Guard estrutural: objeto de valor mutável abre porta para estado parcial
     em qualquer ponto do código, não só em transicionar."""
@@ -113,6 +137,7 @@ def test_modelos_de_valor_sao_frozen(obj):
 # ===========================================================================
 # GRUPO D — Video.de_info_dict
 # ===========================================================================
+
 
 def test_d1_converte_o_fixture_real(info_dict_real):
     v = Video.de_info_dict(info_dict_real)
@@ -135,7 +160,7 @@ def test_d2_acodec_ausente_nao_levanta_keyerror(info_dict_real):
     Qualquer acesso por colchete (f['acodec']) levanta KeyError e derruba a
     montagem do preview inteiro. O risco não é classificar errado — é crashar.
     """
-    v = Video.de_info_dict(info_dict_real)          # não pode estourar
+    v = Video.de_info_dict(info_dict_real)  # não pode estourar
     assert len(v.formatos) > 0
 
 
@@ -208,7 +233,7 @@ def test_d7_largura_e_altura_sao_inteiros_ou_none(info_dict_real):
 @pytest.mark.parametrize("chave", ["duration", "thumbnail", "channel", "upload_date"])
 def test_d8_campos_ausentes_viram_none(info_dict_real, chave):
     bruto = {k: v for k, v in info_dict_real.items() if k != chave}
-    v = Video.de_info_dict(bruto)          # não pode estourar
+    v = Video.de_info_dict(bruto)  # não pode estourar
     assert v is not None
 
 
@@ -227,15 +252,22 @@ def test_d10_url_canonica_vem_de_webpage_url(info_dict_real):
 
 
 def test_d11_formats_vazio():
-    v = Video.de_info_dict({"id": "x", "extractor_key": "Youtube",
-                            "webpage_url": "https://x", "title": "t",
-                            "formats": []})
+    v = Video.de_info_dict(
+        {
+            "id": "x",
+            "extractor_key": "Youtube",
+            "webpage_url": "https://x",
+            "title": "t",
+            "formats": [],
+        }
+    )
     assert v.formatos == ()
 
 
 def test_d12_sem_a_chave_formats():
-    v = Video.de_info_dict({"id": "x", "extractor_key": "Youtube",
-                            "webpage_url": "https://x", "title": "t"})
+    v = Video.de_info_dict(
+        {"id": "x", "extractor_key": "Youtube", "webpage_url": "https://x", "title": "t"}
+    )
     assert v.formatos == ()
 
 
@@ -243,27 +275,34 @@ def test_d12_sem_a_chave_formats():
 # tem_video / tem_audio isolados — os três estados
 # ===========================================================================
 
+
 def f(vcodec, acodec, ext="mp4"):
     return Formato("x", ext, None, None, None, None, vcodec, acodec, None, None)
 
 
-@pytest.mark.parametrize("fmt,esperado", [
-    (f("avc1.64", "mp4a.40.2"), True),
-    (f("avc1.64", "none"), True),
-    (f("none", "mp4a.40.2"), False),
-    (f("none", None), False),
-])
+@pytest.mark.parametrize(
+    "fmt,esperado",
+    [
+        (f("avc1.64", "mp4a.40.2"), True),
+        (f("avc1.64", "none"), True),
+        (f("none", "mp4a.40.2"), False),
+        (f("none", None), False),
+    ],
+)
 def test_tem_video(fmt, esperado):
     assert tem_video(fmt) is esperado
 
 
-@pytest.mark.parametrize("fmt,esperado", [
-    (f("avc1.64", "mp4a.40.2"), True),
-    (f("avc1.64", "none"), False),
-    (f("none", "mp4a.40.2"), True),
-    (f("none", None), True),        # desconhecido + sem vídeo = é áudio
-    (f("avc1.64", None), False),    # desconhecido + com vídeo = conservador
-])
+@pytest.mark.parametrize(
+    "fmt,esperado",
+    [
+        (f("avc1.64", "mp4a.40.2"), True),
+        (f("avc1.64", "none"), False),
+        (f("none", "mp4a.40.2"), True),
+        (f("none", None), True),  # desconhecido + sem vídeo = é áudio
+        (f("avc1.64", None), False),  # desconhecido + com vídeo = conservador
+    ],
+)
 def test_tem_audio(fmt, esperado):
     """A linha que importa: vcodec='none' com acodec desconhecido é ÁUDIO.
 

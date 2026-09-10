@@ -18,10 +18,8 @@ from ..domain.models import Job, Progresso
 from ..download.traducao_erros import ErroDeDownload
 from .progresso import AgregadorProgresso
 
-AVISO_JA_EXISTIA = ("O arquivo já existia no destino; o download foi pulado e "
-                    "nada foi sobrescrito.")
-AVISO_HISTORICO = ("O download terminou, mas o histórico não pôde ser "
-                   "atualizado: {erro}")
+AVISO_JA_EXISTIA = "O arquivo já existia no destino; o download foi pulado e nada foi sobrescrito."
+AVISO_HISTORICO = "O download terminou, mas o histórico não pôde ser atualizado: {erro}"
 
 # Intervalo em que o laço acorda para checar o pedido de parada.
 _PASSO_S = 0.05
@@ -31,6 +29,7 @@ _PASSO_S = 0.05
 class Preparacao:
     """O que o worker precisa para chamar o adapter: resolvido pelo pipeline
     (perfil -> opções, projeto + nome -> destino) e injetado como callable."""
+
     url: str
     opcoes: dict
     destino: str
@@ -54,8 +53,7 @@ class Worker:
     dublês e não tocam a rede.
     """
 
-    def __init__(self, fila, downloader, historico,
-                 preparar: Callable[[Job], Preparacao]):
+    def __init__(self, fila, downloader, historico, preparar: Callable[[Job], Preparacao]):
         self._fila = fila
         self._downloader = downloader
         self._historico = historico
@@ -72,8 +70,7 @@ class Worker:
         if self.vivo:
             return
         self._parar.clear()
-        self._thread = threading.Thread(
-            target=self._laco, name="worker-download", daemon=True)
+        self._thread = threading.Thread(target=self._laco, name="worker-download", daemon=True)
         self._thread.start()
 
     def parar(self, timeout: float = 5.0) -> None:
@@ -94,7 +91,7 @@ class Worker:
             self._fila.interromper_em_andamento()
             try:
                 self._historico.marcar_interrompidos()
-            except Exception:          # noqa: BLE001 — já estamos encerrando
+            except Exception:  # noqa: BLE001 — já estamos encerrando
                 pass
 
     # -------------------------------------------------------------- o laço
@@ -107,8 +104,9 @@ class Worker:
             try:
                 self._processar(job)
             except Exception as erro:  # noqa: BLE001 — a thread nunca morre
-                self._falhar(job, MotivoFalha.DESCONHECIDO.value,
-                             f"erro interno do worker: {_texto(erro)}")
+                self._falhar(
+                    job, MotivoFalha.DESCONHECIDO.value, f"erro interno do worker: {_texto(erro)}"
+                )
 
     def _processar(self, job: Job) -> None:
         # 1. A linha `baixando` no histórico, ANTES do download: é o que
@@ -117,11 +115,13 @@ class Worker:
         #    histórico contradiz "sei onde cada arquivo está".
         try:
             registro = self._historico.iniciar(
-                job.video, perfil=job.perfil, projeto=job.projeto,
-                url_original=job.url_original or job.video.url_canonica)
+                job.video,
+                perfil=job.perfil,
+                projeto=job.projeto,
+                url_original=job.url_original or job.video.url_canonica,
+            )
         except Exception as erro:  # noqa: BLE001
-            self._falhar(job, MotivoFalha.DISCO.value,
-                         f"histórico indisponível: {_texto(erro)}")
+            self._falhar(job, MotivoFalha.DISCO.value, f"histórico indisponível: {_texto(erro)}")
             return
         registro_id = getattr(registro, "id", None)
 
@@ -130,8 +130,7 @@ class Worker:
         try:
             preparacao = self._preparar(job)
         except Exception as erro:  # noqa: BLE001
-            self._falhar(job, MotivoFalha.DESCONHECIDO.value, _texto(erro),
-                         registro_id=registro_id)
+            self._falhar(job, MotivoFalha.DESCONHECIDO.value, _texto(erro), registro_id=registro_id)
             return
 
         # O caminho pretendido vai para o histórico ANTES do download: sem
@@ -147,8 +146,7 @@ class Worker:
         # Não é falha: o footage está no destino. Mas o usuário precisa saber
         # que nada foi baixado (decisão 1).
         if os.path.exists(preparacao.destino):
-            self._concluir(job, preparacao.destino, None, registro_id,
-                           ja_existia=True)
+            self._concluir(job, preparacao.destino, None, registro_id, ja_existia=True)
             return
 
         # 3. O hook: pode vir de outra thread (RESEARCH 3.4), dispara muitas
@@ -161,8 +159,12 @@ class Worker:
             try:
                 info = d.get("info_dict") if isinstance(d, dict) else None
                 info = info if isinstance(info, dict) else {}
-                if (isinstance(d, dict) and d.get("status") == "finished"
-                        and info.get("width") and info.get("height")):
+                if (
+                    isinstance(d, dict)
+                    and d.get("status") == "finished"
+                    and info.get("width")
+                    and info.get("height")
+                ):
                     # O 'finished' do formato mesclado traz a resolução REAL:
                     # é o que denuncia um fallback abaixo do perfil.
                     resolucao["valor"] = f"{info['width']}x{info['height']}"
@@ -176,27 +178,28 @@ class Worker:
 
         # 4. O download.
         try:
-            caminho = self._downloader.baixar(
-                preparacao.url, preparacao.opcoes, ao_progredir)
+            caminho = self._downloader.baixar(preparacao.url, preparacao.opcoes, ao_progredir)
         except ErroDeDownload as erro:
-            self._falhar(job, erro.motivo.value, erro.classificacao.mensagem_original,
-                         registro_id=registro_id)
+            self._falhar(
+                job,
+                erro.motivo.value,
+                erro.classificacao.mensagem_original,
+                registro_id=registro_id,
+            )
             return
         except Exception as erro:  # noqa: BLE001 — bug no adapter não mata a thread
-            self._falhar(job, MotivoFalha.DESCONHECIDO.value, _texto(erro),
-                         registro_id=registro_id)
+            self._falhar(job, MotivoFalha.DESCONHECIDO.value, _texto(erro), registro_id=registro_id)
             return
 
         self._concluir(job, caminho, resolucao["valor"], registro_id)
 
     # ------------------------------------------------------------ desfechos
 
-    def _falhar(self, job: Job, motivo: str, mensagem: str,
-                registro_id: int | None = None) -> None:
+    def _falhar(self, job: Job, motivo: str, mensagem: str, registro_id: int | None = None) -> None:
         try:
             self._fila.falhar(job.id, motivo=motivo, mensagem=mensagem)
         except TransicaoIlegal:
-            return          # já interrompido por parar(): não mexe
+            return  # já interrompido por parar(): não mexe
         if registro_id is None:
             return
         try:
@@ -206,8 +209,15 @@ class Worker:
             # certo; o aviso conta que o histórico ficou para trás.
             self._fila.avisar(job.id, AVISO_HISTORICO.format(erro=_texto(erro)))
 
-    def _concluir(self, job: Job, caminho: str, resolucao: str | None,
-                  registro_id: int | None = None, *, ja_existia: bool = False) -> None:
+    def _concluir(
+        self,
+        job: Job,
+        caminho: str,
+        resolucao: str | None,
+        registro_id: int | None = None,
+        *,
+        ja_existia: bool = False,
+    ) -> None:
         try:
             self._fila.concluir(job.id, caminho, ja_existia=ja_existia)
         except TransicaoIlegal:
@@ -221,8 +231,11 @@ class Worker:
             return
         try:
             self._historico.concluir(
-                registro_id, caminho=caminho,
+                registro_id,
+                caminho=caminho,
                 tamanho_bytes=_tamanho_arquivo(caminho),
-                resolucao=resolucao, ja_existia=ja_existia)
+                resolucao=resolucao,
+                ja_existia=ja_existia,
+            )
         except Exception as erro:  # noqa: BLE001
             self._fila.avisar(job.id, AVISO_HISTORICO.format(erro=_texto(erro)))

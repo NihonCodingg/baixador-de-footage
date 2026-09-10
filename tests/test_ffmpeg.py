@@ -17,12 +17,16 @@ from src.download.ffmpeg import StatusFFmpeg, detectar
 def which_falso(mapa: dict):
     def _which(nome, *args, **kwargs):
         return mapa.get(nome)
+
     return _which
 
 
 def test_ambos_encontrados(monkeypatch):
-    monkeypatch.setattr(ffmpeg.shutil, "which",
-                        which_falso({"ffmpeg": "C:/x/ffmpeg.EXE", "ffprobe": "C:/x/ffprobe.EXE"}))
+    monkeypatch.setattr(
+        ffmpeg.shutil,
+        "which",
+        which_falso({"ffmpeg": "C:/x/ffmpeg.EXE", "ffprobe": "C:/x/ffprobe.EXE"}),
+    )
     s = detectar()
     assert s.disponivel and s.completo
     assert s.ffmpeg == "C:/x/ffmpeg.EXE"
@@ -70,6 +74,7 @@ def test_status_e_imutavel():
 def test_na_maquina_real_encontra_o_binario():
     """Critério de pronto do T1: caminhos reais na máquina de destino."""
     import os
+
     s = detectar()
     assert s.disponivel
     assert os.path.isfile(s.ffmpeg)

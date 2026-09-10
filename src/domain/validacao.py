@@ -24,10 +24,13 @@ TAMANHO_ID_YOUTUBE = 11
 _ID = r"[0-9A-Za-z_-]{11}"
 
 # Sem o prefixo "www.", que é removido antes da comparação.
+# Tabela protegida do formatador: domínios agrupados por família.
+# fmt: off
 HOSTS_YOUTUBE = frozenset({
     "youtube.com", "m.youtube.com", "music.youtube.com",
     "youtu.be", "youtube-nocookie.com",
 })
+# fmt: on
 
 # /shorts/ID, /embed/ID, /live/ID, /v/ID, /e/ID — o id vem no caminho.
 _CAMINHO_COM_ID = re.compile(r"^/(?:shorts|embed|live|v|e)/(" + _ID + r")(?:/|$)")
@@ -55,6 +58,7 @@ class LinkNormalizado:
 
     `url` é None quando a linha é inválida; nesse caso `erro` explica.
     """
+
     original: str
     url: str | None
     video_id: str | None
@@ -205,8 +209,11 @@ def normalizar_lote(texto: str) -> tuple[LinkNormalizado, ...]:
             resultado = normalizar_link(linha)
         except LinkInvalido as erro:
             resultado = LinkNormalizado(
-                original=linha, url=None, video_id=None,
-                e_youtube=False, erro=str(erro),
+                original=linha,
+                url=None,
+                video_id=None,
+                e_youtube=False,
+                erro=str(erro),
             )
         chave = resultado.url if resultado.ok else resultado.original
         if chave in vistos:

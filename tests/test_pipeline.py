@@ -29,6 +29,7 @@ ESPERA = 5.0
 # Dublês e fixtures
 # ===========================================================================
 
+
 class DownloaderEco:
     """Devolve como caminho final exatamente o outtmpl que recebeu — como se
     o yt-dlp tivesse gravado onde mandamos. Cria o arquivo para o tamanho
@@ -61,11 +62,13 @@ class DownloaderEco:
 
 def ffmpeg_presente():
     from src.download.ffmpeg import StatusFFmpeg
+
     return StatusFFmpeg(ffmpeg="C:/x/ffmpeg.EXE", ffprobe="C:/x/ffprobe.EXE")
 
 
 def ffmpeg_ausente():
     from src.download.ffmpeg import StatusFFmpeg
+
     return StatusFFmpeg(ffmpeg=None, ffprobe=None)
 
 
@@ -76,10 +79,17 @@ def ambiente(tmp_path):
     config.mkdir()
     shutil.copy(RAIZ / "config" / "perfis.yaml", config / "perfis.yaml")
     footage = tmp_path / "footage"
-    (config / "projetos.yaml").write_text(yaml.safe_dump({"projetos": {
-        "pessoal": {"nome": "Canal pessoal", "pasta": str(footage / "pessoal")},
-        "cliente_x": {"nome": "Cliente X", "pasta": str(footage / "cliente_x")},
-    }}), encoding="utf-8")
+    (config / "projetos.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "projetos": {
+                    "pessoal": {"nome": "Canal pessoal", "pasta": str(footage / "pessoal")},
+                    "cliente_x": {"nome": "Cliente X", "pasta": str(footage / "cliente_x")},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     return {"config": config, "data": tmp_path / "data", "footage": footage}
 
 
@@ -90,8 +100,9 @@ def subir(ambiente, info_dict_real):
 
     def _subir(downloader=None, detectar_ffmpeg=ffmpeg_presente):
         dl = downloader or DownloaderEco(info_dict_real)
-        p = Pipeline(ambiente["config"], ambiente["data"],
-                     downloader=dl, detectar_ffmpeg=detectar_ffmpeg)
+        p = Pipeline(
+            ambiente["config"], ambiente["data"], downloader=dl, detectar_ffmpeg=detectar_ffmpeg
+        )
         criados.append(p)
         return p, dl
 
@@ -118,6 +129,7 @@ def esperar_terminal(pipeline, job_id, espera=ESPERA):
 # Subida
 # ===========================================================================
 
+
 def test_sobe_e_cria_o_banco(subir, ambiente):
     p, _ = subir()
     assert (ambiente["data"] / "historico.db").exists()
@@ -127,14 +139,23 @@ def test_reconcilia_interrompidos_na_subida(ambiente, info_dict_real):
     """SPEC 10.1: o que estava `baixando` quando o programa fechou vira
     `interrompido` na subida seguinte — nunca concluído."""
     from src.domain.models import Video
+
     h = Historico(ambiente["data"] / "historico.db")
     h.criar_schema()
-    h.iniciar(Video.de_info_dict(info_dict_real), perfil="edicao_1080",
-              projeto="pessoal", url_original=URL_REAL)
+    h.iniciar(
+        Video.de_info_dict(info_dict_real),
+        perfil="edicao_1080",
+        projeto="pessoal",
+        url_original=URL_REAL,
+    )
     h.fechar()
 
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real), detectar_ffmpeg=ffmpeg_presente)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+    )
     try:
         linhas = p.historico()
         assert linhas[0]["status"] == "interrompido"
@@ -145,7 +166,12 @@ def test_reconcilia_interrompidos_na_subida(ambiente, info_dict_real):
 def test_config_lista_perfis_projetos_e_ffmpeg(subir):
     p, _ = subir()
     c = p.config()
-    assert {x["nome"] for x in c["perfis"]} == {"edicao_1080", "edicao_4k", "so_audio", "preview_leve"}
+    assert {x["nome"] for x in c["perfis"]} == {
+        "edicao_1080",
+        "edicao_4k",
+        "so_audio",
+        "preview_leve",
+    }
     assert all(x["disponivel"] for x in c["perfis"])
     assert {x["nome"] for x in c["projetos"]} == {"pessoal", "cliente_x"}
     assert all(x["valido"] for x in c["projetos"])
@@ -167,6 +193,7 @@ def test_config_e_serializavel_em_json(subir):
 # ===========================================================================
 # inspecionar — metadados sem baixar, resultado parcial
 # ===========================================================================
+
 
 def test_inspecionar_link_real(subir):
     p, dl = subir()
@@ -258,6 +285,7 @@ def test_inspecionar_texto_vazio(subir):
 # enfileirar — validação e o ciclo completo
 # ===========================================================================
 
+
 def test_enfileirar_e_baixar_ate_o_fim(subir, ambiente):
     p, dl = subir()
     ids = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
@@ -267,8 +295,10 @@ def test_enfileirar_e_baixar_ate_o_fim(subir, ambiente):
     caminho = Path(j["caminho_final"])
     assert caminho.exists()
     assert caminho.parent == ambiente["footage"] / "pessoal"
-    assert caminho.name == ("20260901 - Camisa azul da Seleção críticas ao design "
-                            "e lembrança histórica [LzS8kB6lIm0].mp4")
+    assert caminho.name == (
+        "20260901 - Camisa azul da Seleção críticas ao design "
+        "e lembrança histórica [LzS8kB6lIm0].mp4"
+    )
 
 
 def test_enfileirar_resolve_o_seletor_pela_orientacao(subir):
@@ -309,9 +339,13 @@ def test_enfileirar_varios_na_ordem(subir, info_dict_real):
     assert [j["id"] for j in p.estado_fila()] == ids
 
 
-@pytest.mark.parametrize("perfil,projeto", [
-    ("nao_existe", "pessoal"), ("edicao_1080", "nao_existe"),
-])
+@pytest.mark.parametrize(
+    "perfil,projeto",
+    [
+        ("nao_existe", "pessoal"),
+        ("edicao_1080", "nao_existe"),
+    ],
+)
 def test_enfileirar_perfil_ou_projeto_inexistente(subir, perfil, projeto):
     p, _ = subir()
     with pytest.raises(EntradaInvalida):
@@ -389,10 +423,16 @@ def test_falha_do_site_vira_job_falhou_com_motivo(subir, info_dict_real):
 
 def test_pasta_profunda_gera_aviso_no_job(ambiente, info_dict_real):
     pasta = ambiente["footage"] / ("p" * 80)
-    (ambiente["config"] / "projetos.yaml").write_text(yaml.safe_dump({"projetos": {
-        "fundo": {"nome": "Fundo", "pasta": str(pasta)}}}), encoding="utf-8")
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real), detectar_ffmpeg=ffmpeg_presente)
+    (ambiente["config"] / "projetos.yaml").write_text(
+        yaml.safe_dump({"projetos": {"fundo": {"nome": "Fundo", "pasta": str(pasta)}}}),
+        encoding="utf-8",
+    )
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+    )
     try:
         ids = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="fundo")
         j = esperar_terminal(p, ids[0])
@@ -406,9 +446,16 @@ def test_pasta_profunda_gera_aviso_no_job(ambiente, info_dict_real):
 # estado_fila / cancelar / historico
 # ===========================================================================
 
+
 def test_estado_fila_e_serializavel_e_traz_progresso(subir, info_dict_real):
-    eventos = [{"status": "downloading", "downloaded_bytes": 5, "total_bytes": 10,
-                "info_dict": {"format_id": "137"}}]
+    eventos = [
+        {
+            "status": "downloading",
+            "downloaded_bytes": 5,
+            "total_bytes": 10,
+            "info_dict": {"format_id": "137"},
+        }
+    ]
     p, _ = subir(DownloaderEco(info_dict_real, eventos=eventos))
     ids = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
     j = esperar_terminal(p, ids[0])
@@ -474,12 +521,16 @@ def test_encerrar_e_idempotente(subir):
 # ETAPA 2 — decisoes aplicadas depois do smoke test
 # ===========================================================================
 
+
 def test_decisao6_nao_cria_a_pasta_do_projeto_na_subida(ambiente, info_dict_real):
     """Decisao 6: nada de D:/FOOTAGE/cliente_exemplo aparecer por causa de um
     YAML de exemplo. A pasta so nasce quando um download precisa dela."""
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+    )
     try:
         assert not (ambiente["footage"] / "pessoal").exists()
         assert not (ambiente["footage"] / "cliente_x").exists()
@@ -502,12 +553,23 @@ def test_decisao6_pasta_sem_ancestral_gravavel_e_invalida(ambiente, info_dict_re
     """Um destino impossivel tem que aparecer como projeto invalido, com
     motivo, e nao estourar so na hora de baixar."""
     import yaml as _yaml
-    (ambiente["config"] / "projetos.yaml").write_text(_yaml.safe_dump({"projetos": {
-        "impossivel": {"nome": "X", "pasta": "Z:/nao/existe/esse/disco"},
-    }}), encoding="utf-8")
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente)
+
+    (ambiente["config"] / "projetos.yaml").write_text(
+        _yaml.safe_dump(
+            {
+                "projetos": {
+                    "impossivel": {"nome": "X", "pasta": "Z:/nao/existe/esse/disco"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+    )
     try:
         projeto = p.config()["projetos"][0]
         assert projeto["valido"] is False
@@ -594,14 +656,21 @@ def test_decisao5_interrompido_com_arquivo_no_destino_avisa(ambiente, info_dict_
 
     h = Historico(ambiente["data"] / "historico.db")
     h.criar_schema()
-    r = h.iniciar(Video.de_info_dict(info_dict_real), perfil="edicao_1080",
-                  projeto="pessoal", url_original=URL_REAL)
+    r = h.iniciar(
+        Video.de_info_dict(info_dict_real),
+        perfil="edicao_1080",
+        projeto="pessoal",
+        url_original=URL_REAL,
+    )
     h.registrar_destino(r.id, str(arquivo))
     h.fechar()
 
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+    )
     try:
         reg = p.historico()[0]
         assert reg["status"] == "interrompido"
@@ -618,14 +687,21 @@ def test_decisao5_interrompido_sem_arquivo_nao_avisa(ambiente, info_dict_real):
 
     h = Historico(ambiente["data"] / "historico.db")
     h.criar_schema()
-    r = h.iniciar(Video.de_info_dict(info_dict_real), perfil="edicao_1080",
-                  projeto="pessoal", url_original=URL_REAL)
+    r = h.iniciar(
+        Video.de_info_dict(info_dict_real),
+        perfil="edicao_1080",
+        projeto="pessoal",
+        url_original=URL_REAL,
+    )
     h.registrar_destino(r.id, str(ambiente["footage"] / "pessoal" / "nao_existe.mp4"))
     h.fechar()
 
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+    )
     try:
         reg = p.historico()[0]
         assert reg["status"] == "interrompido"
@@ -656,6 +732,7 @@ def test_estado_fila_expoe_ja_existia(subir):
 # Cookies do navegador
 # ===========================================================================
 
+
 def test_cookies_desligados_por_padrao(subir):
     p, _ = subir()
     c = p.cookies()
@@ -676,10 +753,15 @@ def cookies_legiveis(navegador, perfil=None):
 
 def test_ligar_cookies_grava_no_yaml_e_no_downloader(ambiente, info_dict_real):
     from src.download.adapter import Downloader
+
     dl = Downloader(fabrica_ydl=lambda o: None)
-    p = Pipeline(ambiente["config"], ambiente["data"], downloader=dl,
-                 detectar_ffmpeg=ffmpeg_presente,
-                 testar_cookies_de=cookies_legiveis)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=dl,
+        detectar_ffmpeg=ffmpeg_presente,
+        testar_cookies_de=cookies_legiveis,
+    )
     try:
         resultado = p.definir_cookies("firefox", "default")
         assert resultado["ativo"] is True
@@ -692,10 +774,15 @@ def test_ligar_cookies_grava_no_yaml_e_no_downloader(ambiente, info_dict_real):
 
 def test_desligar_cookies(ambiente, info_dict_real):
     from src.download.adapter import Downloader
+
     dl = Downloader(fabrica_ydl=lambda o: None)
-    p = Pipeline(ambiente["config"], ambiente["data"], downloader=dl,
-                 detectar_ffmpeg=ffmpeg_presente,
-                 testar_cookies_de=cookies_legiveis)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=dl,
+        detectar_ffmpeg=ffmpeg_presente,
+        testar_cookies_de=cookies_legiveis,
+    )
     try:
         p.definir_cookies("firefox")
         assert p.definir_cookies(None)["ativo"] is False
@@ -708,20 +795,24 @@ def test_navegador_ilegivel_e_recusado_com_a_causa(ambiente, info_dict_real):
     """O yt-dlp embrulha toda falha de cookie em "failed to load cookies" e
     joga a causa fora. Testar a leitura na hora de ESCOLHER é o que preserva a
     causa — e evita ligar uma opção que só falharia no meio do download."""
+
     def ilegivel(navegador, perfil=None):
         return "Failed to decrypt with DPAPI. See  https://...  for more info"
 
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente, testar_cookies_de=ilegivel)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+        testar_cookies_de=ilegivel,
+    )
     try:
         with pytest.raises(EntradaInvalida) as erro:
             p.definir_cookies("edge")
         assert "DPAPI" in str(erro.value), "a causa real tem que chegar ao usuário"
         assert "Feche o navegador" in str(erro.value)
         assert p.cookies()["ativo"] is False, "não pode ter ligado"
-        assert not (ambiente["config"] / "cookies.yaml").exists(), \
-            "não pode ter gravado"
+        assert not (ambiente["config"] / "cookies.yaml").exists(), "não pode ter gravado"
     finally:
         p.encerrar()
 
@@ -729,12 +820,17 @@ def test_navegador_ilegivel_e_recusado_com_a_causa(ambiente, info_dict_real):
 def test_desligar_nao_testa_leitura(ambiente, info_dict_real):
     """Desligar tem que funcionar mesmo com o navegador quebrado — é
     justamente a saída de quem ligou e se arrependeu."""
+
     def sempre_falha(navegador, perfil=None):
         return "qualquer coisa"
 
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente, testar_cookies_de=sempre_falha)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+        testar_cookies_de=sempre_falha,
+    )
     try:
         assert p.definir_cookies(None)["ativo"] is False
     finally:
@@ -753,11 +849,13 @@ def test_navegador_desconhecido_e_recusado_na_hora(subir):
 def test_navegador_invalido_no_yaml_nao_derruba_a_subida(ambiente, info_dict_real):
     """Cookies são acessório: um valor errado no arquivo desliga a opção e
     explica na tela, em vez de impedir a aplicação de subir."""
-    (ambiente["config"] / "cookies.yaml").write_text(
-        'navegador: "netscape"\n', encoding="utf-8")
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente)
+    (ambiente["config"] / "cookies.yaml").write_text('navegador: "netscape"\n', encoding="utf-8")
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+    )
     try:
         c = p.cookies()
         assert c["ativo"] is False
@@ -768,10 +866,14 @@ def test_navegador_invalido_no_yaml_nao_derruba_a_subida(ambiente, info_dict_rea
 
 def test_yaml_de_cookies_e_lido_na_subida(ambiente, info_dict_real):
     (ambiente["config"] / "cookies.yaml").write_text(
-        'navegador: "firefox"\nperfil: "default"\n', encoding="utf-8")
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente)
+        'navegador: "firefox"\nperfil: "default"\n', encoding="utf-8"
+    )
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+    )
     try:
         assert p.cookies()["navegador"] == "firefox"
         assert p.cookies()["perfil"] == "default"
@@ -783,9 +885,13 @@ def test_ligar_cookies_limpa_o_cache_de_inspecao(ambiente, info_dict_real):
     """O cache guarda metadados obtidos SEM cookies. Sem limpar, ligar a
     opção não mudaria nada para um link já inspecionado."""
     dl = DownloaderEco(info_dict_real)
-    p = Pipeline(ambiente["config"], ambiente["data"], downloader=dl,
-                 detectar_ffmpeg=ffmpeg_presente,
-                 testar_cookies_de=cookies_legiveis)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=dl,
+        detectar_ffmpeg=ffmpeg_presente,
+        testar_cookies_de=cookies_legiveis,
+    )
     p.inspecionar(URL_REAL)
     antes = sum(1 for c in dl.chamadas if c[0] == "inspecionar")
 
@@ -801,6 +907,7 @@ def test_ligar_cookies_limpa_o_cache_de_inspecao(ambiente, info_dict_real):
 # ===========================================================================
 # Projetos gerenciados pela tela
 # ===========================================================================
+
 
 class DownloaderQueTrava:
     """Segura o download até liberarem, para haver job ATIVO na fila."""
@@ -825,9 +932,12 @@ class DownloaderQueTrava:
 @pytest.fixture
 def com_projetos(ambiente, info_dict_real, tmp_path):
     """Pipeline real, mais uma pasta que EXISTE para cadastrar."""
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+    )
     nova = tmp_path / "pasta_nova"
     nova.mkdir()
     yield p, nova, ambiente["config"] / "projetos.yaml"
@@ -908,8 +1018,9 @@ def test_adicionar_projeto_recusa_o_nome_reservado(com_projetos):
     assert "reservado" in str(erro.value)
 
 
-@pytest.mark.parametrize("nome", ["com espaço", "acentuação", "", "-comeca-com-traco",
-                                  "barra/no/meio", "x" * 41])
+@pytest.mark.parametrize(
+    "nome", ["com espaço", "acentuação", "", "-comeca-com-traco", "barra/no/meio", "x" * 41]
+)
 def test_adicionar_projeto_recusa_nome_malformado(com_projetos, nome):
     p, nova, _ = com_projetos
     with pytest.raises(EntradaInvalida):
@@ -933,8 +1044,9 @@ def test_remover_projeto_com_download_ativo_e_recusado(ambiente, info_dict_real)
     """Remover o destino de um download em andamento deixaria o worker sem
     para onde gravar, no meio da gravação."""
     dl = DownloaderQueTrava(info_dict_real)
-    p = Pipeline(ambiente["config"], ambiente["data"], downloader=dl,
-                 detectar_ffmpeg=ffmpeg_presente)
+    p = Pipeline(
+        ambiente["config"], ambiente["data"], downloader=dl, detectar_ffmpeg=ffmpeg_presente
+    )
     try:
         p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
         assert dl.entrou.wait(5), "o download não começou"
@@ -959,10 +1071,13 @@ def test_remover_o_ultimo_projeto_e_recusado(com_projetos):
 
 def test_escolher_pasta_e_injetado(ambiente, info_dict_real):
     """O seletor nativo nunca roda em teste: o dublê prova a ligação."""
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente,
-                 escolher_pasta=lambda: "D:/FOOTAGE/escolhida")
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+        escolher_pasta=lambda: "D:/FOOTAGE/escolhida",
+    )
     try:
         assert p.escolher_pasta() == "D:/FOOTAGE/escolhida"
     finally:
@@ -972,6 +1087,7 @@ def test_escolher_pasta_e_injetado(ambiente, info_dict_real):
 # ===========================================================================
 # Destino avulso — pasta digitada na hora, sem cadastrar projeto
 # ===========================================================================
+
 
 def test_pasta_avulsa_baixa_para_o_caminho_digitado(com_projetos):
     p, nova, arquivo = com_projetos
@@ -983,8 +1099,9 @@ def test_pasta_avulsa_baixa_para_o_caminho_digitado(com_projetos):
     assert job["estado"] == "concluido"
     assert Path(job["caminho_final"]).parent == nova
     assert job["projeto"] == "avulso"
-    assert arquivo.read_text(encoding="utf-8") == antes, \
+    assert arquivo.read_text(encoding="utf-8") == antes, (
         "destino avulso não pode gravar nada no projetos.yaml"
+    )
 
 
 def test_pasta_avulsa_entra_no_historico_com_o_caminho_exato(com_projetos):
@@ -999,16 +1116,14 @@ def test_pasta_avulsa_entra_no_historico_com_o_caminho_exato(com_projetos):
 def test_pasta_avulsa_recusa_caminho_que_nao_existe(com_projetos, tmp_path):
     p, _, _ = com_projetos
     with pytest.raises(EntradaInvalida) as erro:
-        p.enfileirar([URL_REAL], perfil="edicao_1080",
-                     pasta=str(tmp_path / "nao_existe"))
+        p.enfileirar([URL_REAL], perfil="edicao_1080", pasta=str(tmp_path / "nao_existe"))
     assert "avulsa" in str(erro.value) and "não existe" in str(erro.value)
 
 
 def test_projeto_e_pasta_juntos_e_recusado(com_projetos):
     p, nova, _ = com_projetos
     with pytest.raises(EntradaInvalida) as erro:
-        p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal",
-                     pasta=str(nova))
+        p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal", pasta=str(nova))
     assert "não os dois" in str(erro.value)
 
 
@@ -1030,14 +1145,18 @@ def test_simular_aceita_pasta_avulsa(com_projetos):
 # endpoint local de "abre qualquer coisa do disco"
 # ===========================================================================
 
+
 @pytest.fixture
 def com_abridor(ambiente, info_dict_real):
     """Pipeline cujo abridor é um espião: nenhuma janela é aberta."""
     abertas = []
-    p = Pipeline(ambiente["config"], ambiente["data"],
-                 downloader=DownloaderEco(info_dict_real),
-                 detectar_ffmpeg=ffmpeg_presente,
-                 abrir_no_explorador=abertas.append)
+    p = Pipeline(
+        ambiente["config"],
+        ambiente["data"],
+        downloader=DownloaderEco(info_dict_real),
+        detectar_ffmpeg=ffmpeg_presente,
+        abrir_no_explorador=abertas.append,
+    )
     yield p, abertas, ambiente["footage"]
     p.encerrar()
 
@@ -1133,6 +1252,7 @@ def test_abrir_pasta_ignora_caixa_no_windows(com_abridor):
 # simular — o que alimenta o --dry-run
 # ===========================================================================
 
+
 def test_simular_nao_baixa_e_nao_cria_pasta(subir, ambiente):
     p, dl = subir()
     itens = p.simular([URL_REAL], perfil="edicao_1080", projeto="pessoal")
@@ -1144,8 +1264,7 @@ def test_simular_nao_baixa_e_nao_cria_pasta(subir, ambiente):
 
 def test_simular_marca_link_invalido_sem_derrubar_os_outros(subir):
     p, _ = subir()
-    itens = p.simular([URL_REAL, "isso não é link"],
-                      perfil="edicao_1080", projeto="pessoal")
+    itens = p.simular([URL_REAL, "isso não é link"], perfil="edicao_1080", projeto="pessoal")
     assert [i["ok"] for i in itens] == [True, False]
     assert itens[1]["motivo"] == "link_invalido"
 
@@ -1158,8 +1277,7 @@ def test_simular_recusa_perfil_inexistente(subir):
 
 def test_simular_avisa_que_ja_foi_baixado(subir):
     p, _ = subir()
-    esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080",
-                                     projeto="pessoal")[0])
+    esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")[0])
     item = p.simular([URL_REAL], perfil="edicao_1080", projeto="pessoal")[0]
     assert item["ja_baixado"] is not None
     assert item["ja_baixado"]["caminho"]

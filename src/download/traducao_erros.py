@@ -74,6 +74,7 @@ class Classificacao:
     `detalhes` carrega o que o motivo tiver de específico: `paises` no
     bloqueio regional, `status_http` na falha de rede.
     """
+
     motivo: MotivoFalha
     mensagem_original: str
     detalhes: dict = field(default_factory=dict)
@@ -130,10 +131,12 @@ def desembrulhar(err: Exception) -> Exception:
     """
     atual = err
     vistos: set[int] = set()
-    while (isinstance(atual, DownloadError)
-           and atual.exc_info
-           and atual.exc_info[1] is not None
-           and id(atual) not in vistos):
+    while (
+        isinstance(atual, DownloadError)
+        and atual.exc_info
+        and atual.exc_info[1] is not None
+        and id(atual) not in vistos
+    ):
         vistos.add(id(atual))
         atual = atual.exc_info[1]
     return atual
@@ -181,7 +184,8 @@ def classificar(err: Exception) -> Classificacao:
     # --- por tipo -----------------------------------------------------------
     if isinstance(original, GeoRestrictedError):
         return Classificacao(
-            MotivoFalha.BLOQUEIO_REGIONAL, mensagem,
+            MotivoFalha.BLOQUEIO_REGIONAL,
+            mensagem,
             {"paises": list(original.countries or [])},
         )
 

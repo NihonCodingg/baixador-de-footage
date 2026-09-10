@@ -27,6 +27,7 @@ SRC = RAIZ / "src"
 # Coleta
 # ---------------------------------------------------------------------------
 
+
 def arquivos_python(pacote: str) -> list[Path]:
     """Todos os .py sob src/<pacote>/, recursivamente."""
     return sorted((SRC / pacote).rglob("*.py"))
@@ -48,7 +49,7 @@ def modulo_de(caminho: Path) -> str:
 def pacote_de(caminho: Path) -> str:
     """Pacote que contém o arquivo. src/domain/nomes.py -> src.domain"""
     modulo = modulo_de(caminho)
-    if (caminho.name == "__init__.py"):
+    if caminho.name == "__init__.py":
         return modulo
     return modulo.rsplit(".", 1)[0]
 
@@ -77,7 +78,7 @@ def imports_de(caminho: Path) -> list[str]:
             # Import relativo: sobe `level` níveis a partir do pacote atual.
             partes = pacote.split(".")
             subir = no.level - 1
-            base = partes[:len(partes) - subir] if subir else partes
+            base = partes[: len(partes) - subir] if subir else partes
             alvo = ".".join(base + ([no.module] if no.module else []))
             encontrados.append(alvo)
 
@@ -114,8 +115,7 @@ def test_dominio_nao_importa_ytdlp(arquivo):
     """Restrição técnica 3: o domínio não conhece o yt-dlp."""
     for importado in imports_de(arquivo):
         assert not viola(importado, "yt_dlp"), (
-            f"{modulo_de(arquivo)} importa {importado!r}.\n"
-            f"Só src/download/ pode conhecer o yt-dlp."
+            f"{modulo_de(arquivo)} importa {importado!r}.\nSó src/download/ pode conhecer o yt-dlp."
         )
 
 
@@ -127,8 +127,7 @@ def test_dominio_nao_toca_disco_nem_rede(arquivo):
     caminho, o que é lógica pura. Quem toca o disco é `os`, `shutil`,
     `sqlite3`, `socket`, `requests`, `urllib.request`.
     """
-    proibidos = ("os", "shutil", "sqlite3", "socket", "requests",
-                 "urllib.request", "http.client")
+    proibidos = ("os", "shutil", "sqlite3", "socket", "requests", "urllib.request", "http.client")
     for importado in imports_de(arquivo):
         for proibido in proibidos:
             assert not viola(importado, proibido), (
@@ -142,6 +141,7 @@ def test_dominio_nao_toca_disco_nem_rede(arquivo):
 # ---------------------------------------------------------------------------
 # REGRA 2 — a web fala com o pipeline, não com o domínio
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("arquivo", arquivos_python("web"), ids=modulo_de)
 def test_web_nao_importa_dominio(arquivo):
@@ -159,6 +159,7 @@ def test_web_nao_importa_dominio(arquivo):
 # Fronteira do yt-dlp
 # ---------------------------------------------------------------------------
 
+
 def test_apenas_o_adapter_conhece_ytdlp():
     """Restrição técnica 1: `import yt_dlp` só existe em src/download/."""
     infratores = []
@@ -169,14 +170,13 @@ def test_apenas_o_adapter_conhece_ytdlp():
             if viola(importado, "yt_dlp"):
                 infratores.append(f"{modulo_de(arquivo)} -> {importado}")
 
-    assert not infratores, (
-        "Só src/download/ pode importar yt_dlp.\n  " + "\n  ".join(infratores)
-    )
+    assert not infratores, "Só src/download/ pode importar yt_dlp.\n  " + "\n  ".join(infratores)
 
 
 # ---------------------------------------------------------------------------
 # Sanidade do próprio teste
 # ---------------------------------------------------------------------------
+
 
 def test_o_teste_esta_realmente_olhando_arquivos():
     """Guarda contra falso-positivo.
@@ -199,8 +199,7 @@ def test_todo_pacote_de_src_esta_presente(pacote):
     """
     arquivos = arquivos_python(pacote)
     assert arquivos, f"src/{pacote}/ não existe ou está vazio"
-    assert any(a.name != "__init__.py" for a in arquivos), \
-        f"src/{pacote}/ só tem __init__.py"
+    assert any(a.name != "__init__.py" for a in arquivos), f"src/{pacote}/ só tem __init__.py"
 
 
 def test_resolucao_de_import_relativo():

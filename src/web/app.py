@@ -33,11 +33,11 @@ PASTA_WEB = RAIZ / "web"
 HOST = "127.0.0.1"
 PORTA = 8000
 ENDERECO = f"http://{HOST}:{PORTA}"
-ESPERA_NAVEGADOR = 1.0          # segundos até o uvicorn estar ouvindo
+ESPERA_NAVEGADOR = 1.0  # segundos até o uvicorn estar ouvindo
 
 
 class CorpoInspecionar(BaseModel):
-    links: str                      # um link por linha, como colado no textarea
+    links: str  # um link por linha, como colado no textarea
 
 
 class CorpoFila(BaseModel):
@@ -47,22 +47,22 @@ class CorpoFila(BaseModel):
     # dos dois falta é regra de negócio, e vira 400 no pipeline — não 422.
     projeto: str | None = None
     pasta: str | None = None
-    forcar: bool = False            # rebaixar um vídeo já concluído neste perfil
+    forcar: bool = False  # rebaixar um vídeo já concluído neste perfil
 
 
 class CorpoCookies(BaseModel):
-    navegador: str | None = None    # None ou "" desliga
+    navegador: str | None = None  # None ou "" desliga
     perfil: str | None = None
 
 
 class CorpoProjeto(BaseModel):
-    nome: str                       # identificador: letras, números, - e _
-    caminho: str                    # pasta existente e gravável
-    rotulo: str | None = None       # texto para a tela; o nome, se ausente
+    nome: str  # identificador: letras, números, - e _
+    caminho: str  # pasta existente e gravável
+    rotulo: str | None = None  # texto para a tela; o nome, se ausente
 
 
 class CorpoAbrirPasta(BaseModel):
-    caminho: str                    # arquivo ou pasta, sempre dentro de um projeto
+    caminho: str  # arquivo ou pasta, sempre dentro de um projeto
 
 
 def _erro(status: int, mensagem: str, **extras) -> JSONResponse:
@@ -80,10 +80,11 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
     @asynccontextmanager
     async def ciclo_de_vida(app: FastAPI):
         yield
-        pipeline.encerrar()         # para o worker e fecha o histórico
+        pipeline.encerrar()  # para o worker e fecha o histórico
 
-    app = FastAPI(title="Baixador de Footage", lifespan=ciclo_de_vida,
-                  docs_url=None, redoc_url=None)
+    app = FastAPI(
+        title="Baixador de Footage", lifespan=ciclo_de_vida, docs_url=None, redoc_url=None
+    )
 
     # ----------------------------------------------------------- erros
 
@@ -101,8 +102,7 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def _validacao(request: Request, exc: RequestValidationError):
-        return _erro(422, "Corpo ou parâmetros inválidos.",
-                     detalhes=jsonable_encoder(exc.errors()))
+        return _erro(422, "Corpo ou parâmetros inválidos.", detalhes=jsonable_encoder(exc.errors()))
 
     @app.exception_handler(Exception)
     async def _interno(request: Request, exc: Exception):
@@ -117,8 +117,9 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
 
     @app.post("/api/fila")
     def enfileirar(corpo: CorpoFila):
-        ids = pipeline.enfileirar(corpo.urls, corpo.perfil, corpo.projeto,
-                                  corpo.forcar, corpo.pasta)
+        ids = pipeline.enfileirar(
+            corpo.urls, corpo.perfil, corpo.projeto, corpo.forcar, corpo.pasta
+        )
         return {"ids": ids}
 
     @app.get("/api/fila")
@@ -131,8 +132,11 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
         return {"cancelado": True}
 
     @app.get("/api/historico")
-    def historico(termo: str | None = None, projeto: str | None = None,
-                  limite: int = Query(100, ge=1, le=1000)):
+    def historico(
+        termo: str | None = None,
+        projeto: str | None = None,
+        limite: int = Query(100, ge=1, le=1000),
+    ):
         return {"registros": pipeline.historico(termo, projeto, limite)}
 
     @app.post("/api/cookies")
@@ -147,8 +151,7 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
     @app.post("/api/projetos")
     def adicionar_projeto(corpo: CorpoProjeto):
         """Cadastra e grava no config/projetos.yaml, preservando comentários."""
-        return {"projeto": pipeline.adicionar_projeto(
-            corpo.nome, corpo.caminho, corpo.rotulo)}
+        return {"projeto": pipeline.adicionar_projeto(corpo.nome, corpo.caminho, corpo.rotulo)}
 
     @app.delete("/api/projetos/{nome}")
     def remover_projeto(nome: str):
@@ -172,8 +175,7 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
         return pipeline.config()
 
     # Estáticos por último: o mount em "/" pega tudo que as rotas não pegaram.
-    app.mount("/", StaticFiles(directory=str(pasta_web or PASTA_WEB), html=True),
-              name="web")
+    app.mount("/", StaticFiles(directory=str(pasta_web or PASTA_WEB), html=True), name="web")
     return app
 
 

@@ -28,18 +28,18 @@ def main() -> int:
     try:
         import tkinter
         from tkinter import filedialog
-    except ImportError as erro:               # python sem tk
+    except ImportError as erro:  # python sem tk
         print(f"tkinter indisponível: {erro}", file=sys.stderr)
         return 2
 
     raiz = tkinter.Tk()
-    raiz.withdraw()                            # só o diálogo aparece
+    raiz.withdraw()  # só o diálogo aparece
     # Sem isto o diálogo abre ATRÁS do navegador, e parece que nada aconteceu.
     raiz.attributes("-topmost", True)
     try:
         escolhido = filedialog.askdirectory(
-            title="Escolha a pasta de destino do footage",
-            mustexist=True, parent=raiz)
+            title="Escolha a pasta de destino do footage", mustexist=True, parent=raiz
+        )
     finally:
         raiz.destroy()
 

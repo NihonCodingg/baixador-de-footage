@@ -23,9 +23,9 @@ NOME_AVULSO = "avulso"
 
 @dataclass(frozen=True)
 class Projeto:
-    nome: str        # a chave no YAML; identifica o projeto na API
-    rotulo: str      # o `nome:` do YAML; o que a interface mostra
-    pasta: str       # destino, sem barra final
+    nome: str  # a chave no YAML; identifica o projeto na API
+    rotulo: str  # o `nome:` do YAML; o que a interface mostra
+    pasta: str  # destino, sem barra final
 
 
 def carregar_projetos(dados: dict) -> dict[str, Projeto]:
@@ -33,11 +33,12 @@ def carregar_projetos(dados: dict) -> dict[str, Projeto]:
 
     Levanta ProjetoInvalido.
     """
-    if (not isinstance(dados, dict)
-            or not isinstance(dados.get("projetos"), dict)
-            or not dados["projetos"]):
-        raise ProjetoInvalido(
-            "Configuração de projetos vazia ou sem a chave 'projetos'.")
+    if (
+        not isinstance(dados, dict)
+        or not isinstance(dados.get("projetos"), dict)
+        or not dados["projetos"]
+    ):
+        raise ProjetoInvalido("Configuração de projetos vazia ou sem a chave 'projetos'.")
 
     projetos: dict[str, Projeto] = {}
     for chave, bruto in dados["projetos"].items():
@@ -65,11 +66,11 @@ def validar_nome(nome: str) -> str:
     if not nome:
         raise ProjetoInvalido("O nome do projeto não pode ficar em branco.")
     if nome.casefold() == NOME_AVULSO:
-        raise ProjetoInvalido(
-            f"{NOME_AVULSO!r} é reservado para downloads em pasta avulsa.")
+        raise ProjetoInvalido(f"{NOME_AVULSO!r} é reservado para downloads em pasta avulsa.")
     if not NOME_VALIDO.match(nome):
         raise ProjetoInvalido(
             "O nome do projeto aceita letras, números, hífen e sublinhado, "
             "começa por letra ou número e tem no máximo 40 caracteres. "
-            f"Recebido: {nome!r}")
+            f"Recebido: {nome!r}"
+        )
     return nome

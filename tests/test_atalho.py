@@ -26,7 +26,8 @@ def test_usa_a_mesma_porta_do_servidor(texto):
     """Trocar PORTA em src/web/app.py sem trocar aqui faria o atalho abrir o
     navegador num endereço vazio, sem erro nenhum."""
     assert f"set PORTA={PORTA}\n" in texto, (
-        f"o atalho precisa apontar para a porta {PORTA} de src/web/app.py")
+        f"o atalho precisa apontar para a porta {PORTA} de src/web/app.py"
+    )
 
 
 def test_entra_na_propria_pasta(texto):

@@ -44,7 +44,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
 
-PASTA_SAIDA = Path("saida")          # já está no .gitignore
+PASTA_SAIDA = Path("saida")  # já está no .gitignore
 ARQUIVO_META = Path("spike_meta.json")
 
 # Perfil "edicao_1080" da Seção 2.2 do RESEARCH.md.
@@ -52,16 +52,14 @@ ARQUIVO_META = Path("spike_meta.json")
 # aguenta sem sofrer. Os ramos depois de cada "/" são fallback: se o site não
 # oferecer H.264, aceitamos qualquer codec em vez de falhar.
 FORMATO_1080 = (
-    "bv*[height<=1080][vcodec^=avc1]+ba[acodec^=mp4a]"
-    "/bv*[height<=1080]+ba"
-    "/b[height<=1080]"
-    "/b"
+    "bv*[height<=1080][vcodec^=avc1]+ba[acodec^=mp4a]/bv*[height<=1080]+ba/b[height<=1080]/b"
 )
 
 
 # ===========================================================================
 # Utilidades de formatação
 # ===========================================================================
+
 
 def humanizar_bytes(n):
     if not n:
@@ -93,6 +91,7 @@ def titulo_secao(texto):
 # 1. ffmpeg
 # ===========================================================================
 
+
 def verificar_ffmpeg():
     """Detecta ffmpeg e ffprobe via PATH.
 
@@ -122,6 +121,7 @@ def verificar_ffmpeg():
 # 2. Metadados, sem baixar nada
 # ===========================================================================
 
+
 def buscar_metadados(url):
     """extract_info com download=False: toca a rede, mas não o stream de mídia."""
     titulo_secao("2. METADADOS (sem baixar)")
@@ -142,8 +142,7 @@ def buscar_metadados(url):
 
     print(f"  título    : {info.get('title')}")
     print(f"  canal     : {info.get('channel') or info.get('uploader')}")
-    print(f"  duração   : {humanizar_duracao(info.get('duration'))}"
-          f"  ({info.get('duration')} s)")
+    print(f"  duração   : {humanizar_duracao(info.get('duration'))}  ({info.get('duration')} s)")
     print(f"  id        : {info.get('id')}")
     print(f"  extractor : {info.get('extractor_key')}")
     print(f"  upload    : {info.get('upload_date')}")
@@ -162,8 +161,10 @@ def imprimir_formatos(info):
         print("  (nenhum formato retornado)")
         return
 
-    cab = f"  {'ID':<10} {'EXT':<5} {'RESOLUÇÃO':<12} {'FPS':>5} " \
-          f"{'TBR':>8} {'VCODEC':<16} {'ACODEC':<12} {'TAMANHO':>10}"
+    cab = (
+        f"  {'ID':<10} {'EXT':<5} {'RESOLUÇÃO':<12} {'FPS':>5} "
+        f"{'TBR':>8} {'VCODEC':<16} {'ACODEC':<12} {'TAMANHO':>10}"
+    )
     print(cab)
     print("  " + "-" * (len(cab) - 2))
 
@@ -185,12 +186,9 @@ def imprimir_formatos(info):
     print(f"\n  total: {len(formatos)} formatos")
 
     # Contagem por tipo — ajuda a ver que 1080p é video-only e precisa de merge.
-    so_video = sum(1 for f in formatos
-                   if f.get("vcodec") != "none" and f.get("acodec") == "none")
-    so_audio = sum(1 for f in formatos
-                   if f.get("vcodec") == "none" and f.get("acodec") != "none")
-    combinado = sum(1 for f in formatos
-                    if f.get("vcodec") != "none" and f.get("acodec") != "none")
+    so_video = sum(1 for f in formatos if f.get("vcodec") != "none" and f.get("acodec") == "none")
+    so_audio = sum(1 for f in formatos if f.get("vcodec") == "none" and f.get("acodec") != "none")
+    combinado = sum(1 for f in formatos if f.get("vcodec") != "none" and f.get("acodec") != "none")
     print(f"  só-vídeo: {so_video}   só-áudio: {so_audio}   combinados: {combinado}")
 
 
@@ -209,6 +207,7 @@ def salvar_meta(info):
 # 3. Download com progresso
 # ===========================================================================
 
+
 class Monitor:
     """Coleta o progresso e registra de qual thread cada callback veio.
 
@@ -219,7 +218,7 @@ class Monitor:
     """
 
     def __init__(self):
-        self.threads_vistas = {}      # nome da thread -> nº de chamadas
+        self.threads_vistas = {}  # nome da thread -> nº de chamadas
         self.thread_principal = threading.current_thread().name
         self.ultimo_print = 0.0
         self.chamadas = 0
@@ -316,8 +315,7 @@ def relatar_arquivo(caminhos):
         print(f"  caminho : {p.resolve()}")
         print(f"  existe  : {existe}")
         if existe:
-            print(f"  tamanho : {humanizar_bytes(p.stat().st_size)}"
-                  f"  ({p.stat().st_size} bytes)")
+            print(f"  tamanho : {humanizar_bytes(p.stat().st_size)}  ({p.stat().st_size} bytes)")
             print(f"  extensão: {p.suffix}")
 
 
@@ -329,8 +327,7 @@ def relatar_threads(monitor):
     print(f"  eventos 'finished'           : {monitor.eventos_finished}")
     print()
     print("  threads que executaram o hook:")
-    for nome, qtd in sorted(monitor.threads_vistas.items(),
-                            key=lambda kv: -kv[1]):
+    for nome, qtd in sorted(monitor.threads_vistas.items(), key=lambda kv: -kv[1]):
         marca = "  <-- principal" if nome == monitor.thread_principal else ""
         print(f"    {nome:<24} {qtd:>6} chamadas{marca}")
 
@@ -349,6 +346,7 @@ def relatar_threads(monitor):
 # ===========================================================================
 # Tratamento de erro
 # ===========================================================================
+
 
 def explicar_erro(err):
     """Desembrulha a exceção real de dentro do DownloadError.
@@ -388,6 +386,7 @@ def explicar_erro(err):
 
 
 # ===========================================================================
+
 
 def main():
     if len(sys.argv) < 2:

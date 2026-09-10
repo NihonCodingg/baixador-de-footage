@@ -22,21 +22,33 @@ ESPERA = 3.0
 
 
 def video(video_id="LzS8kB6lIm0") -> Video:
-    return Video(video_id=video_id, extractor="Youtube",
-                 url_canonica=f"https://www.youtube.com/watch?v={video_id}",
-                 titulo="t", canal=None, duracao_s=None, thumbnail_url=None,
-                 data_upload=None, formatos=())
+    return Video(
+        video_id=video_id,
+        extractor="Youtube",
+        url_canonica=f"https://www.youtube.com/watch?v={video_id}",
+        titulo="t",
+        canal=None,
+        duracao_s=None,
+        thumbnail_url=None,
+        data_upload=None,
+        formatos=(),
+    )
 
 
 def job(video_id="LzS8kB6lIm0", id_="j1") -> Job:
-    return Job(id=id_, video=video(video_id), perfil="edicao_1080", projeto="p",
-               estado=EstadoJob.NA_FILA, criado_em=datetime(2026, 9, 2),
-               url_original="u")
+    return Job(
+        id=id_,
+        video=video(video_id),
+        perfil="edicao_1080",
+        projeto="p",
+        estado=EstadoJob.NA_FILA,
+        criado_em=datetime(2026, 9, 2),
+        url_original="u",
+    )
 
 
 def preparar_simples(j: Job) -> Preparacao:
-    return Preparacao(url=j.video.url_canonica, opcoes={"format": "b"},
-                      destino=f"D:/F/{j.id}.mp4")
+    return Preparacao(url=j.video.url_canonica, opcoes={"format": "b"}, destino=f"D:/F/{j.id}.mp4")
 
 
 class RegistroFalso:
@@ -67,10 +79,10 @@ class HistoricoFalso:
     def registrar_destino(self, registro_id, caminho):
         self.chamadas.append(("registrar_destino", registro_id, caminho))
 
-    def concluir(self, registro_id, *, caminho, tamanho_bytes, resolucao=None,
-                 ja_existia=False):
-        self.chamadas.append(("concluir", registro_id, caminho, tamanho_bytes,
-                              resolucao, ja_existia))
+    def concluir(self, registro_id, *, caminho, tamanho_bytes, resolucao=None, ja_existia=False):
+        self.chamadas.append(
+            ("concluir", registro_id, caminho, tamanho_bytes, resolucao, ja_existia)
+        )
         self.terminou.set()
         if self.falhar_em_desfecho:
             raise self.falhar_em_desfecho
@@ -157,6 +169,7 @@ def montar():
 # Ciclo feliz
 # ===========================================================================
 
+
 def test_ciclo_feliz(montar):
     dl = DownloaderRoteirizado()
     fila, w, hist = montar(dl)
@@ -201,10 +214,16 @@ def test_historico_recebe_iniciar_antes_do_download(montar):
 
 
 def test_progresso_do_hook_chega_na_fila(montar):
-    dl = DownloaderRoteirizado(eventos=[
-        {"status": "downloading", "downloaded_bytes": 50, "total_bytes": 100,
-         "info_dict": {"format_id": "137"}},
-    ])
+    dl = DownloaderRoteirizado(
+        eventos=[
+            {
+                "status": "downloading",
+                "downloaded_bytes": 50,
+                "total_bytes": 100,
+                "info_dict": {"format_id": "137"},
+            },
+        ]
+    )
     fila, w, hist = montar(dl)
     fila.adicionar(job())
     assert hist.terminou.wait(ESPERA)
@@ -214,12 +233,22 @@ def test_progresso_do_hook_chega_na_fila(montar):
 
 def test_progresso_agrega_video_e_audio(montar):
     """Caso 4 da RESEARCH 3.4: dois streams, cada um com seus bytes."""
-    dl = DownloaderRoteirizado(eventos=[
-        {"status": "downloading", "downloaded_bytes": 500, "total_bytes": 1000,
-         "info_dict": {"format_id": "137"}},
-        {"status": "downloading", "downloaded_bytes": 200, "total_bytes": 400,
-         "info_dict": {"format_id": "140"}},
-    ])
+    dl = DownloaderRoteirizado(
+        eventos=[
+            {
+                "status": "downloading",
+                "downloaded_bytes": 500,
+                "total_bytes": 1000,
+                "info_dict": {"format_id": "137"},
+            },
+            {
+                "status": "downloading",
+                "downloaded_bytes": 200,
+                "total_bytes": 400,
+                "info_dict": {"format_id": "140"},
+            },
+        ]
+    )
     fila, w, hist = montar(dl)
     fila.adicionar(job())
     assert hist.terminou.wait(ESPERA)
@@ -230,10 +259,16 @@ def test_progresso_agrega_video_e_audio(montar):
 def test_resolucao_baixada_vai_para_o_historico(montar):
     """O 'finished' do formato mesclado traz width/height: é a resolução real,
     a que denuncia quando o seletor caiu num fallback."""
-    dl = DownloaderRoteirizado(eventos=[
-        {"status": "finished", "downloaded_bytes": 10, "total_bytes": 10,
-         "info_dict": {"format_id": "137+140", "width": 1080, "height": 1920}},
-    ])
+    dl = DownloaderRoteirizado(
+        eventos=[
+            {
+                "status": "finished",
+                "downloaded_bytes": 10,
+                "total_bytes": 10,
+                "info_dict": {"format_id": "137+140", "width": 1080, "height": 1920},
+            },
+        ]
+    )
     fila, w, hist = montar(dl)
     fila.adicionar(job())
     assert hist.terminou.wait(ESPERA)
@@ -265,6 +300,7 @@ def test_hook_que_levanta_nao_derruba_o_worker(montar, monkeypatch):
 # Falhas
 # ===========================================================================
 
+
 def test_erro_de_download_vira_falhou_com_motivo(montar):
     dl = DownloaderRoteirizado(erro=erro_de_download())
     fila, w, hist = montar(dl)
@@ -295,6 +331,7 @@ def test_erro_inesperado_vira_falhou_desconhecido_e_o_worker_sobrevive(montar):
 
 def test_preparar_que_falha_vira_falhou_sem_chamar_o_downloader(montar):
     """Pasta profunda demais (NomeImpossivel) é falha do job, não do worker."""
+
     def preparar(j):
         raise NomeImpossivel("pasta profunda demais")
 
@@ -327,6 +364,7 @@ def fila_terminou(fila, job_id, espera=ESPERA):
 
     def observar():
         import time
+
         prazo = time.monotonic() + espera
         while time.monotonic() < prazo:
             j = fila.obter(job_id)
@@ -342,6 +380,7 @@ def fila_terminou(fila, job_id, espera=ESPERA):
 # ===========================================================================
 # Serialização e cancelamento
 # ===========================================================================
+
 
 def test_um_download_por_vez(montar):
     dl = DownloaderBloqueante()
@@ -377,6 +416,7 @@ def test_cancelado_antes_de_comecar_nao_e_baixado(montar):
 # parar() — interrupção
 # ===========================================================================
 
+
 def test_parar_com_fila_vazia_retorna_limpo(montar):
     fila, w, hist = montar(DownloaderRoteirizado())
     w.parar(timeout=ESPERA)
@@ -406,7 +446,7 @@ def test_conclusao_tardia_depois_de_parar_nao_ressuscita(montar):
     assert fila.obter("j1").estado is EstadoJob.INTERROMPIDO
 
     dl.liberar.set()
-    assert hist.terminou.wait(ESPERA) or True     # pode ou não gravar; o estado é o que importa
+    assert hist.terminou.wait(ESPERA) or True  # pode ou não gravar; o estado é o que importa
     w.parar(timeout=ESPERA)
     assert fila.obter("j1").estado is EstadoJob.INTERROMPIDO
 
@@ -428,14 +468,21 @@ def test_iniciar_duas_vezes_nao_cria_duas_threads(montar):
 # Integração com o histórico real
 # ===========================================================================
 
+
 def test_integracao_com_historico_real(tmp_path):
     hist = Historico(tmp_path / "h.db")
     hist.criar_schema()
     fila = Fila()
-    dl = DownloaderRoteirizado(eventos=[
-        {"status": "finished", "downloaded_bytes": 10, "total_bytes": 10,
-         "info_dict": {"format_id": "137+140", "width": 1080, "height": 1920}},
-    ])
+    dl = DownloaderRoteirizado(
+        eventos=[
+            {
+                "status": "finished",
+                "downloaded_bytes": 10,
+                "total_bytes": 10,
+                "info_dict": {"format_id": "137+140", "width": 1080, "height": 1920},
+            },
+        ]
+    )
     w = Worker(fila, dl, hist, preparar_simples)
     w.iniciar()
     fila.adicionar(job())
@@ -452,6 +499,7 @@ def test_integracao_com_historico_real(tmp_path):
 # ===========================================================================
 # ETAPA 2 — decisoes 1, 4 e 5
 # ===========================================================================
+
 
 def test_decisao1_arquivo_ja_existente_e_sucesso_com_aviso(montar, tmp_path):
     """Decisao 1: nao e falha, mas o usuario precisa saber que nao baixou.
@@ -532,6 +580,7 @@ def test_decisao4_falha_ao_gravar_desfecho_vira_aviso_visivel(montar, desfecho):
 
 def esperar_aviso(fila, job_id, espera=ESPERA):
     import time
+
     prazo = time.monotonic() + espera
     while time.monotonic() < prazo:
         j = fila.obter(job_id)

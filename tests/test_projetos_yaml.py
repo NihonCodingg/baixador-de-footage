@@ -10,8 +10,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.storage.projetos_yaml import (ConfigInvalida, adicionar, nomes,
-                                       remover)
+from src.storage.projetos_yaml import ConfigInvalida, adicionar, nomes, remover
 
 ORIGINAL = """\
 # Mapeamento de projeto/cliente para pasta de destino.
@@ -46,6 +45,7 @@ def carregar(alvo: Path) -> dict:
 # Adicionar
 # ===========================================================================
 
+
 def test_adicionar_preserva_todos_os_comentarios(arquivo):
     adicionar(arquivo, "cliente_novo", "Cliente Novo", "D:/FOOTAGE/novo")
     texto = arquivo.read_text(encoding="utf-8")
@@ -59,14 +59,13 @@ def test_adicionar_mantem_os_projetos_anteriores(arquivo):
     projetos = carregar(arquivo)
     assert set(projetos) == {"pessoal", "cliente_exemplo", "cliente_novo"}
     assert projetos["pessoal"]["pasta"] == "D:/FOOTAGE/pessoal"
-    assert projetos["cliente_novo"] == {"nome": "Cliente Novo",
-                                        "pasta": "D:/FOOTAGE/novo"}
+    assert projetos["cliente_novo"] == {"nome": "Cliente Novo", "pasta": "D:/FOOTAGE/novo"}
 
 
 def test_adicionar_escapa_caminho_do_windows(arquivo):
     """`D:\\FOOTAGE\\x` com barra invertida não pode virar escape de YAML."""
-    adicionar(arquivo, "cru", "Cru", "D:\\FOOTAGE\\cliente \"x\"")
-    assert carregar(arquivo)["cru"]["pasta"] == "D:\\FOOTAGE\\cliente \"x\""
+    adicionar(arquivo, "cru", "Cru", 'D:\\FOOTAGE\\cliente "x"')
+    assert carregar(arquivo)["cru"]["pasta"] == 'D:\\FOOTAGE\\cliente "x"'
 
 
 def test_adicionar_aceita_acento_no_rotulo(arquivo):
@@ -81,8 +80,7 @@ def test_adicionar_recusa_nome_repetido(arquivo):
 
 def test_adicionar_nao_quebra_arquivo_sem_quebra_de_linha_final(tmp_path):
     alvo = tmp_path / "projetos.yaml"
-    alvo.write_text('projetos:\n  a:\n    nome: "A"\n    pasta: "D:/a"',
-                    encoding="utf-8")
+    alvo.write_text('projetos:\n  a:\n    nome: "A"\n    pasta: "D:/a"', encoding="utf-8")
     adicionar(alvo, "b", "B", "D:/b")
     assert set(carregar(alvo)) == {"a", "b"}
 
@@ -90,6 +88,7 @@ def test_adicionar_nao_quebra_arquivo_sem_quebra_de_linha_final(tmp_path):
 # ===========================================================================
 # Remover
 # ===========================================================================
+
 
 def test_remover_tira_so_o_bloco_pedido(arquivo):
     remover(arquivo, "pessoal")
@@ -136,6 +135,7 @@ def test_nomes_devolve_na_ordem_do_arquivo(arquivo):
 # ===========================================================================
 # A rede de proteção
 # ===========================================================================
+
 
 def test_arquivo_ilegivel_nao_e_sobrescrito(tmp_path):
     """Se o YAML já estiver quebrado, o editor recusa em vez de piorar."""

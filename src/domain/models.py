@@ -22,12 +22,14 @@ class EstadoJob(str, Enum):
     INTERROMPIDO = "interrompido"
 
 
-ESTADOS_TERMINAIS = frozenset({
-    EstadoJob.CONCLUIDO,
-    EstadoJob.FALHOU,
-    EstadoJob.CANCELADO,
-    EstadoJob.INTERROMPIDO,
-})
+ESTADOS_TERMINAIS = frozenset(
+    {
+        EstadoJob.CONCLUIDO,
+        EstadoJob.FALHOU,
+        EstadoJob.CANCELADO,
+        EstadoJob.INTERROMPIDO,
+    }
+)
 
 # Transições legais. SPEC 10.2.
 TRANSICOES = {
@@ -51,6 +53,7 @@ class Formato:
     Ambas são opcionais: no fixture real, 12 dos 45 formatos não têm dimensão
     (são só-áudio) e 4 são storyboards.
     """
+
     format_id: str
     ext: str
     resolucao: str | None
@@ -112,14 +115,14 @@ def _formato_de_dict(bruto: dict) -> Formato:
         vcodec=bruto.get("vcodec"),
         acodec=bruto.get("acodec"),
         tbr=float(tbr) if tbr is not None else None,
-        tamanho_bytes=_inteiro_positivo(
-            bruto.get("filesize") or bruto.get("filesize_approx")),
+        tamanho_bytes=_inteiro_positivo(bruto.get("filesize") or bruto.get("filesize_approx")),
     )
 
 
 @dataclass(frozen=True)
 class Video:
     """Metadados de um vídeo, obtidos sem baixar."""
+
     video_id: str
     extractor: str
     url_canonica: str
@@ -127,7 +130,7 @@ class Video:
     canal: str | None
     duracao_s: int | None
     thumbnail_url: str | None
-    data_upload: str | None          # AAAAMMDD
+    data_upload: str | None  # AAAAMMDD
     formatos: tuple[Formato, ...]
 
     @classmethod
@@ -144,9 +147,7 @@ class Video:
         normalização serve à decisão barata antes da rede (SPEC 5.3).
         """
         brutos = info.get("formats") or []
-        formatos = tuple(
-            _formato_de_dict(f) for f in brutos if f.get("ext") != "mhtml"
-        )
+        formatos = tuple(_formato_de_dict(f) for f in brutos if f.get("ext") != "mhtml")
         duracao = info.get("duration")
         return cls(
             video_id=str(info.get("id") or ""),
@@ -168,6 +169,7 @@ class Progresso:
     Imutável de propósito: o hook SUBSTITUI o objeto sob lock, nunca muta campo
     a campo (SPEC 10.4).
     """
+
     baixados: int
     total: int | None
     velocidade_bps: float | None
@@ -202,14 +204,16 @@ class Progresso:
             return None
 
         baixados = _inteiro_ou_zero(d.get("downloaded_bytes"))
-        total = (_inteiro_positivo(d.get("total_bytes"))
-                 or _inteiro_positivo(d.get("total_bytes_estimate")))
+        total = _inteiro_positivo(d.get("total_bytes")) or _inteiro_positivo(
+            d.get("total_bytes_estimate")
+        )
 
         if status == "finished":
             if not baixados and total:
                 baixados = total
-            return cls(baixados=baixados, total=total or baixados or None,
-                       velocidade_bps=None, eta_s=0)
+            return cls(
+                baixados=baixados, total=total or baixados or None, velocidade_bps=None, eta_s=0
+            )
 
         return cls(
             baixados=baixados,
@@ -222,6 +226,7 @@ class Progresso:
 @dataclass
 class Job:
     """Um trabalho na fila."""
+
     id: str
     video: Video
     perfil: str
@@ -233,8 +238,8 @@ class Job:
     motivo_falha: str | None = None
     mensagem_falha: str | None = None
     url_original: str | None = None
-    ja_existia: bool = False         # o arquivo já estava no destino
-    aviso: str | None = None         # texto não-bloqueante para a tela
+    ja_existia: bool = False  # o arquivo já estava no destino
+    aviso: str | None = None  # texto não-bloqueante para a tela
 
     def transicionar(self, novo: EstadoJob) -> None:
         """Aplica uma transição, recusando as ilegais. SPEC 10.2.
@@ -245,9 +250,7 @@ class Job:
         """
         permitidas = TRANSICOES.get(self.estado, set())
         if novo not in permitidas:
-            raise TransicaoIlegal(
-                f"Transição ilegal: {self.estado.value} -> {novo.value}"
-            )
+            raise TransicaoIlegal(f"Transição ilegal: {self.estado.value} -> {novo.value}")
         self.estado = novo
 
 

@@ -31,40 +31,69 @@ class PipelineFalso:
         self.chamadas.append(("inspecionar", texto))
         if self.explodir:
             raise RuntimeError("bug interno")
-        return [{"ok": True, "original": texto, "url": "u", "e_youtube": True,
-                 "aviso": None, "video": {"titulo": "t"}, "baixados": {}}]
+        return [
+            {
+                "ok": True,
+                "original": texto,
+                "url": "u",
+                "e_youtube": True,
+                "aviso": None,
+                "video": {"titulo": "t"},
+                "baixados": {},
+            }
+        ]
 
     def enfileirar(self, urls, perfil, projeto=None, forcar=False, pasta=None):
-        self.chamadas.append(
-            ("enfileirar", list(urls), perfil, projeto, forcar, pasta))
+        self.chamadas.append(("enfileirar", list(urls), perfil, projeto, forcar, pasta))
         if self.erro_enfileirar:
             raise self.erro_enfileirar
         return ["id-1", "id-2"][: len(urls)]
 
     def cookies(self):
         self.chamadas.append(("cookies",))
-        return {"navegador": None, "perfil": None, "ativo": False,
-                "motivo": None, "navegadores": ["chrome", "firefox"]}
+        return {
+            "navegador": None,
+            "perfil": None,
+            "ativo": False,
+            "motivo": None,
+            "navegadores": ["chrome", "firefox"],
+        }
 
     def definir_cookies(self, navegador, perfil=None):
         self.chamadas.append(("definir_cookies", navegador, perfil))
         if self.erro_projeto:
             raise self.erro_projeto
-        return {"navegador": navegador, "perfil": perfil,
-                "ativo": bool(navegador), "motivo": None,
-                "navegadores": ["chrome", "firefox"]}
+        return {
+            "navegador": navegador,
+            "perfil": perfil,
+            "ativo": bool(navegador),
+            "motivo": None,
+            "navegadores": ["chrome", "firefox"],
+        }
 
     def projetos(self):
         self.chamadas.append(("projetos",))
-        return [{"nome": "cliente_x", "rotulo": "Cliente X",
-                 "pasta": "D:/FOOTAGE/cliente_x", "valido": True, "motivo": None}]
+        return [
+            {
+                "nome": "cliente_x",
+                "rotulo": "Cliente X",
+                "pasta": "D:/FOOTAGE/cliente_x",
+                "valido": True,
+                "motivo": None,
+            }
+        ]
 
     def adicionar_projeto(self, nome, caminho, rotulo=None):
         self.chamadas.append(("adicionar_projeto", nome, caminho, rotulo))
         if self.erro_projeto:
             raise self.erro_projeto
-        return {"nome": nome, "rotulo": rotulo or nome, "pasta": caminho,
-                "valido": True, "motivo": None}
+        return {
+            "nome": nome,
+            "rotulo": rotulo or nome,
+            "pasta": caminho,
+            "valido": True,
+            "motivo": None,
+        }
 
     def remover_projeto(self, nome):
         self.chamadas.append(("remover_projeto", nome))
@@ -129,6 +158,7 @@ def cliente(web):
 # POST /api/inspecionar
 # ===========================================================================
 
+
 def test_inspecionar_devolve_itens(cliente):
     c, p = cliente
     r = c.post("/api/inspecionar", json={"links": "https://youtu.be/x\nhttps://youtu.be/y"})
@@ -157,14 +187,23 @@ def test_inspecionar_links_vazio_e_aceito_e_devolve_lista_vazia(cliente):
 # POST /api/fila
 # ===========================================================================
 
+
 def test_enfileirar_devolve_ids(cliente):
     c, p = cliente
-    r = c.post("/api/fila", json={"urls": ["https://youtu.be/x"], "perfil": "edicao_1080",
-                                  "projeto": "pessoal"})
+    r = c.post(
+        "/api/fila",
+        json={"urls": ["https://youtu.be/x"], "perfil": "edicao_1080", "projeto": "pessoal"},
+    )
     assert r.status_code == 200
     assert r.json() == {"ids": ["id-1"]}
-    assert p.chamadas[-1] == ("enfileirar", ["https://youtu.be/x"],
-                              "edicao_1080", "pessoal", False, None)
+    assert p.chamadas[-1] == (
+        "enfileirar",
+        ["https://youtu.be/x"],
+        "edicao_1080",
+        "pessoal",
+        False,
+        None,
+    )
 
 
 def test_enfileirar_repassa_forcar(cliente):
@@ -189,10 +228,14 @@ def test_enfileirar_conflito_e_409(cliente):
     assert "D:/F/a.mp4" in r.json()["erro"]
 
 
-@pytest.mark.parametrize("corpo", [
-    {}, {"urls": "nao-e-lista", "perfil": "p", "projeto": "j"},
-    {"urls": ["u"], "projeto": "j"},
-])
+@pytest.mark.parametrize(
+    "corpo",
+    [
+        {},
+        {"urls": "nao-e-lista", "perfil": "p", "projeto": "j"},
+        {"urls": ["u"], "projeto": "j"},
+    ],
+)
 def test_enfileirar_corpo_malformado_e_422(cliente, corpo):
     c, _ = cliente
     r = c.post("/api/fila", json=corpo)
@@ -204,13 +247,13 @@ def test_enfileirar_corpo_malformado_e_422(cliente, corpo):
 # GET /api/fila  e  DELETE /api/fila/{id}
 # ===========================================================================
 
+
 def test_sem_projeto_e_sem_pasta_e_400_nao_422(cliente):
     """Com a pasta avulsa, `projeto` deixou de ser obrigatório no schema.
     Faltar os dois passou a ser regra de negócio — 400, com mensagem — e não
     mais erro de forma."""
     c, p = cliente
-    p.erro_enfileirar = EntradaInvalida(
-        "Informe o projeto de destino, ou uma pasta avulsa.")
+    p.erro_enfileirar = EntradaInvalida("Informe o projeto de destino, ou uma pasta avulsa.")
     r = c.post("/api/fila", json={"urls": ["u"], "perfil": "p"})
     assert r.status_code == 400
     assert "pasta avulsa" in r.json()["erro"]
@@ -218,8 +261,7 @@ def test_sem_projeto_e_sem_pasta_e_400_nao_422(cliente):
 
 def test_fila_repassa_a_pasta_avulsa(cliente):
     c, p = cliente
-    c.post("/api/fila", json={"urls": ["u"], "perfil": "p",
-                              "pasta": "D:/FOOTAGE/avulsa"})
+    c.post("/api/fila", json={"urls": ["u"], "perfil": "p", "pasta": "D:/FOOTAGE/avulsa"})
     assert ("enfileirar", ["u"], "p", None, False, "D:/FOOTAGE/avulsa") in p.chamadas
 
 
@@ -256,6 +298,7 @@ def test_cancelar_em_andamento_e_409(cliente):
 # GET /api/historico
 # ===========================================================================
 
+
 def test_historico_sem_filtro(cliente):
     c, p = cliente
     r = c.get("/api/historico")
@@ -281,6 +324,7 @@ def test_historico_limite_invalido_e_422(cliente, limite):
 # GET /api/config
 # ===========================================================================
 
+
 def test_config(cliente):
     c, _ = cliente
     r = c.get("/api/config")
@@ -291,6 +335,7 @@ def test_config(cliente):
 # ===========================================================================
 # Estáticos e erros
 # ===========================================================================
+
 
 def test_raiz_serve_o_index(cliente):
     c, _ = cliente
@@ -318,7 +363,7 @@ def test_erro_interno_nao_vaza_stack_trace(cliente):
     assert r.status_code == 500
     corpo = r.json()
     assert "erro" in corpo
-    assert "Traceback" not in r.text and "File \"" not in r.text
+    assert "Traceback" not in r.text and 'File "' not in r.text
 
 
 def test_respostas_sao_json(cliente):
@@ -339,6 +384,7 @@ def test_encerra_o_pipeline_ao_desligar(web):
 # ===========================================================================
 # POST /api/cookies
 # ===========================================================================
+
 
 def test_liga_cookies(cliente):
     c, p = cliente
@@ -362,8 +408,7 @@ def test_corpo_vazio_desliga_em_vez_de_422(cliente):
 
 def test_navegador_invalido_e_400(cliente):
     c, p = cliente
-    p.erro_projeto = EntradaInvalida(
-        "Navegador 'netscape' não é suportado pelo yt-dlp.")
+    p.erro_projeto = EntradaInvalida("Navegador 'netscape' não é suportado pelo yt-dlp.")
     r = c.post("/api/cookies", json={"navegador": "netscape"})
     assert r.status_code == 400
     assert "não é suportado" in r.json()["erro"]
@@ -372,6 +417,7 @@ def test_navegador_invalido_e_400(cliente):
 # ===========================================================================
 # Projetos pela tela
 # ===========================================================================
+
 
 def test_lista_projetos(cliente):
     c, _ = cliente
@@ -382,8 +428,10 @@ def test_lista_projetos(cliente):
 
 def test_adiciona_projeto(cliente):
     c, p = cliente
-    r = c.post("/api/projetos", json={"nome": "novo", "caminho": "D:/FOOTAGE/novo",
-                                      "rotulo": "Cliente Novo"})
+    r = c.post(
+        "/api/projetos",
+        json={"nome": "novo", "caminho": "D:/FOOTAGE/novo", "rotulo": "Cliente Novo"},
+    )
     assert r.status_code == 200
     assert r.json()["projeto"]["nome"] == "novo"
     assert ("adicionar_projeto", "novo", "D:/FOOTAGE/novo", "Cliente Novo") in p.chamadas
@@ -439,6 +487,7 @@ def test_remove_projeto_com_download_ativo_e_409(cliente):
 # POST /api/escolher-pasta
 # ===========================================================================
 
+
 def test_escolher_pasta_devolve_o_caminho(cliente):
     c, p = cliente
     r = c.post("/api/escolher-pasta")
@@ -457,8 +506,7 @@ def test_escolher_pasta_cancelado_devolve_nulo(cliente):
 
 def test_escolher_pasta_indisponivel_e_400(cliente):
     c, p = cliente
-    p.erro_projeto = EntradaInvalida(
-        "O seletor de pasta ficou aberto tempo demais e foi fechado.")
+    p.erro_projeto = EntradaInvalida("O seletor de pasta ficou aberto tempo demais e foi fechado.")
     r = c.post("/api/escolher-pasta")
     assert r.status_code == 400
     assert "tempo demais" in r.json()["erro"]
@@ -467,6 +515,7 @@ def test_escolher_pasta_indisponivel_e_400(cliente):
 # ===========================================================================
 # POST /api/abrir-pasta
 # ===========================================================================
+
 
 def test_abrir_pasta_repassa_o_caminho_e_devolve_a_pasta(cliente):
     c, pipeline = cliente
@@ -481,7 +530,8 @@ def test_abrir_pasta_fora_dos_projetos_e_400(cliente):
     c, pipeline = cliente
     pipeline.erro_abrir = EntradaInvalida(
         "Só é possível abrir pastas dentro de um projeto configurado. "
-        "Fora de todos eles: C:/Windows/System32")
+        "Fora de todos eles: C:/Windows/System32"
+    )
     r = c.post("/api/abrir-pasta", json={"caminho": "C:/Windows/System32"})
     assert r.status_code == 400
     assert "projeto configurado" in r.json()["erro"]
@@ -499,11 +549,12 @@ def test_abrir_pasta_sem_campo_caminho_e_422(cliente):
 # Estáticos — a pasta web/ de verdade, a que vai para o usuário
 # ===========================================================================
 
+
 def test_serve_os_arquivos_reais_da_pasta_web():
     """Os testes de estáticos acima usam uma pasta de mentira. Este confere a
     pasta web/ do repositório: sem ela servida, `python -m src.web` abre o
     navegador numa página em branco."""
-    app = criar_app(PipelineFalso())          # sem pasta_web: usa a real
+    app = criar_app(PipelineFalso())  # sem pasta_web: usa a real
     with TestClient(app) as c:
         raiz = c.get("/")
         assert raiz.status_code == 200
@@ -528,6 +579,7 @@ def test_o_front_nao_tem_fonte_de_dados_alem_da_api():
 # ===========================================================================
 # main() — vincula em 127.0.0.1
 # ===========================================================================
+
 
 def test_host_e_loopback():
     assert HOST == "127.0.0.1"
@@ -603,8 +655,7 @@ def test_main_sobe_em_loopback_e_encerra_o_pipeline(monkeypatch, web):
     pipeline = PipelineFalso()
 
     monkeypatch.setattr(app_mod, "Pipeline", lambda *a, **k: pipeline)
-    monkeypatch.setattr(app_mod.uvicorn, "run",
-                        lambda app, **kw: chamadas.update(kw))
+    monkeypatch.setattr(app_mod.uvicorn, "run", lambda app, **kw: chamadas.update(kw))
     app_mod.main()
     assert chamadas["host"] == "127.0.0.1"
     assert isinstance(chamadas["port"], int)

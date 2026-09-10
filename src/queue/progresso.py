@@ -42,8 +42,7 @@ class AgregadorProgresso:
             return Progresso(baixados=0, total=None, velocidade_bps=None, eta_s=None)
 
         baixados = sum(p.baixados for p in itens)
-        total = (sum(p.total for p in itens)
-                 if all(p.total is not None for p in itens) else None)
+        total = sum(p.total for p in itens) if all(p.total is not None for p in itens) else None
         velocidades = [p.velocidade_bps for p in itens if p.velocidade_bps is not None]
         etas = [p.eta_s for p in itens if p.eta_s is not None]
 

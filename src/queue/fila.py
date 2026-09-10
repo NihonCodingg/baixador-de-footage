@@ -53,7 +53,7 @@ class Fila:
             with self._lock:
                 job = self._jobs.get(job_id)
                 if job is None or job.estado is not EstadoJob.NA_FILA:
-                    continue        # cancelado depois de enfileirado: descarta
+                    continue  # cancelado depois de enfileirado: descarta
                 job.transicionar(EstadoJob.BAIXANDO)
                 return copy.copy(job)
 
@@ -70,7 +70,7 @@ class Fila:
             job = self._jobs.get(job_id)
             if job is None or job.estado is not EstadoJob.BAIXANDO:
                 return
-            job.progresso = progresso       # substitui o objeto; nunca muta
+            job.progresso = progresso  # substitui o objeto; nunca muta
 
     def transicionar(self, job_id: str, novo: EstadoJob) -> None:
         """KeyError se o job não existe; TransicaoIlegal se a regra proíbe."""

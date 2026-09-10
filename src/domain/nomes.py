@@ -21,6 +21,8 @@ from .erros import NomeImpossivel
 
 # SPEC 8.2, regra 5. Microsoft: "avoid these names followed immediately by an
 # extension; NUL.txt and NUL.tar.gz are both equivalent to NUL".
+# Tabela protegida do formatador: cada linha é uma família de nomes reservados do DOS.
+# fmt: off
 NOMES_RESERVADOS = frozenset({
     "CON", "PRN", "AUX", "NUL",
     *(f"COM{i}" for i in range(1, 10)),
@@ -29,6 +31,7 @@ NOMES_RESERVADOS = frozenset({
     "COM\u00b9", "COM\u00b2", "COM\u00b3",
     "LPT\u00b9", "LPT\u00b2", "LPT\u00b3",
 })
+# fmt: on
 
 # Mapeamento POR CARACTERE, não regra única (SPEC 8.2).
 # Cada proibido carrega um significado diferente no título; achatar todos em
@@ -77,6 +80,7 @@ class CaminhoMontado:
     espremer o título abaixo de MINIMO_TITULO_SEM_AVISO. Não é erro: o download
     prossegue truncado (SPEC 8.3).
     """
+
     caminho: str
     aviso: str | None = None
 
@@ -148,8 +152,7 @@ def truncar_titulo(titulo: str, limite: int) -> str:
     return titulo[:limite].rstrip(" .")
 
 
-def montar_nome(titulo: str, video_id: str, data_upload: str | None,
-                extensao: str) -> str:
+def montar_nome(titulo: str, video_id: str, data_upload: str | None, extensao: str) -> str:
     """Monta `{data} - {titulo} [{id}].{ext}`. SPEC 8.1.
 
     Sem data_upload, o template vira `{titulo} [{id}].{ext}`.
@@ -168,8 +171,9 @@ def _separador(pasta: str) -> str:
     return "" if pasta.endswith(("/", "\\")) else "/"
 
 
-def montar_caminho(pasta_projeto: str, titulo: str, video_id: str,
-                   data_upload: str | None, extensao: str) -> CaminhoMontado:
+def montar_caminho(
+    pasta_projeto: str, titulo: str, video_id: str, data_upload: str | None, extensao: str
+) -> CaminhoMontado:
     """Caminho completo respeitando o orçamento de SPEC 8.3.
 
     Reserva o custo fixo primeiro; o que sobra é o orçamento do título.
@@ -177,8 +181,7 @@ def montar_caminho(pasta_projeto: str, titulo: str, video_id: str,
     Puro: só monta a string. NÃO cria diretório nem toca o disco.
     """
     separador = _separador(pasta_projeto)
-    fixo = (len(pasta_projeto) + len(separador)
-            + len(f" [{video_id}]") + len(extensao))
+    fixo = len(pasta_projeto) + len(separador) + len(f" [{video_id}]") + len(extensao)
     if data_upload:
         fixo += len(f"{data_upload} - ")
 
@@ -226,7 +229,7 @@ def resolver_colisao(caminho: str, existe) -> str:
     # Separar extensão olhando só o último componente do caminho: uma pasta
     # com ponto no nome ("D:/F.old/video") não pode confundir o rpartition.
     corte = max(caminho.rfind("/"), caminho.rfind("\\"))
-    prefixo, nome = caminho[:corte + 1], caminho[corte + 1:]
+    prefixo, nome = caminho[: corte + 1], caminho[corte + 1 :]
     raiz_nome, ponto, ext = nome.rpartition(".")
     if ponto:
         raiz, extensao = prefixo + raiz_nome, f".{ext}"

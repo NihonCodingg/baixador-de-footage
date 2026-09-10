@@ -23,9 +23,7 @@ def info_dict_real():
     (Portão 2), então quem clonar o repo pode não ter o arquivo.
     """
     if not SPIKE_META.exists():
-        pytest.skip(
-            "spike_meta.json não encontrado. Gere com: python spike.py <URL>"
-        )
+        pytest.skip("spike_meta.json não encontrado. Gere com: python spike.py <URL>")
     return json.loads(SPIKE_META.read_text(encoding="utf-8"))
 
 

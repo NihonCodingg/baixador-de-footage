@@ -23,6 +23,7 @@ def fabrica(info=None, erro=None):
     A classe registra cada instância criada em `instancias`, para os testes
     inspecionarem as opções recebidas e se o contexto foi fechado.
     """
+
     class YDLFalso:
         instancias = []
 
@@ -58,6 +59,7 @@ def embrulhar(original, msg="ERROR: x"):
 # ===========================================================================
 # inspecionar
 # ===========================================================================
+
 
 def test_inspecionar_nao_baixa():
     F = fabrica(info={"id": "abc", "title": "t"})
@@ -213,8 +215,10 @@ def test_baixar_nao_toca_ignoreerrors():
 # Sem injeção, a fábrica é o yt-dlp de verdade
 # ===========================================================================
 
+
 def test_fabrica_padrao_e_o_youtubedl_real():
     import yt_dlp
+
     assert Downloader()._fabrica is yt_dlp.YoutubeDL
 
 
@@ -228,6 +232,7 @@ from src.download.adapter import validar_seletor  # noqa: E402
 def test_validar_seletor_aceita_os_quatro_perfis_reais():
     import yaml
     from pathlib import Path
+
     raiz = Path(__file__).resolve().parent.parent
     perfis = yaml.safe_load((raiz / "config" / "perfis.yaml").read_text(encoding="utf-8"))["perfis"]
     for cfg in perfis.values():
@@ -248,6 +253,7 @@ def test_validar_seletor_nao_precisa_de_rede():
 # ===========================================================================
 # Cookies do navegador
 # ===========================================================================
+
 
 def test_sem_cookies_por_padrao():
     """Desligado por padrão: ler cookie de navegador é intrusivo, e a
@@ -293,5 +299,6 @@ def test_a_lista_de_navegadores_vem_do_ytdlp():
     quando o yt-dlp mudar."""
     import yt_dlp.cookies
     from src.download.adapter import NAVEGADORES
+
     assert set(NAVEGADORES) == set(yt_dlp.cookies.SUPPORTED_BROWSERS)
     assert "firefox" in NAVEGADORES and "chrome" in NAVEGADORES

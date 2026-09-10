@@ -18,8 +18,8 @@ from .models import Formato
 class Perfil:
     nome: str
     descricao: str
-    format: str                       # template com o placeholder {dim}
-    limite_dimensao: int | None       # teto aplicado na MENOR dimensão
+    format: str  # template com o placeholder {dim}
+    limite_dimensao: int | None  # teto aplicado na MENOR dimensão
     format_sort: tuple[str, ...]
     merge_output_format: str
     postprocessors: tuple[dict, ...]
@@ -33,6 +33,8 @@ CONTAINERS_VALIDOS = frozenset({"mp4", "mkv", "webm", "m4a", "mp3", "opus"})
 # segurança para falhar na CARGA em vez de com KeyError no meio de um job.
 # Não importa yt_dlp de propósito (REGRA 1); a checagem autoritativa, se um
 # dia for necessária, entra injetada como `validar_seletor`.
+# Tabela protegida do formatador: 22 nomes do yt-dlp em 7 linhas, não em 22.
+# fmt: off
 POSTPROCESSORS_CONHECIDOS = frozenset({
     "FFmpegExtractAudio", "FFmpegMetadata", "FFmpegVideoRemuxer",
     "FFmpegVideoConvertor", "FFmpegEmbedSubtitle", "FFmpegSubtitlesConvertor",
@@ -42,6 +44,7 @@ POSTPROCESSORS_CONHECIDOS = frozenset({
     "MoveFilesAfterDownload", "SponsorBlock", "XAttrMetadata",
     "ExecAfterDownload", "Exec",
 })
+# fmt: on
 
 
 def campo_limite(formatos: Sequence[Formato]) -> str | None:
@@ -99,10 +102,12 @@ def carregar_perfis(dados: dict, validar_seletor=None) -> dict[str, Perfil]:
     devolve nada. Um conjunto meio-carregado faria a UI mostrar alguns perfis e
     omitir outros em silêncio.
     """
-    if not isinstance(dados, dict) or not isinstance(dados.get("perfis"), dict)             or not dados["perfis"]:
-        raise PerfilInvalido(
-            "Configuração de perfis vazia ou sem a chave 'perfis'."
-        )
+    if (
+        not isinstance(dados, dict)
+        or not isinstance(dados.get("perfis"), dict)
+        or not dados["perfis"]
+    ):
+        raise PerfilInvalido("Configuração de perfis vazia ou sem a chave 'perfis'.")
     perfis: dict[str, Perfil] = {}
     for nome, bruto in dados["perfis"].items():
         perfis[str(nome)] = validar_perfil(str(nome), bruto, validar_seletor)
@@ -117,6 +122,7 @@ def validar_perfil(nome: str, bruto: dict, validar_seletor=None) -> Perfil:
     `build_format_selector` do yt-dlp, e a REGRA 1 proíbe importá-lo aqui.
     Sem ele, a sintaxe não é checada e o domínio continua puro.
     """
+
     def falha(motivo: str) -> PerfilInvalido:
         return PerfilInvalido(f"Perfil {nome!r}: {motivo}")
 
@@ -142,10 +148,9 @@ def validar_perfil(nome: str, bruto: dict, validar_seletor=None) -> Perfil:
 
     limite = bruto.get("limite_dimensao")
     if limite is not None and (
-            isinstance(limite, bool) or not isinstance(limite, int) or limite <= 0):
-        raise falha(
-            f"limite_dimensao deve ser inteiro positivo ou null, veio {limite!r}."
-        )
+        isinstance(limite, bool) or not isinstance(limite, int) or limite <= 0
+    ):
+        raise falha(f"limite_dimensao deve ser inteiro positivo ou null, veio {limite!r}.")
     if "{dim}" in formato and limite is None:
         raise falha("'format' usa {dim}, mas limite_dimensao é null.")
 
@@ -183,8 +188,7 @@ def validar_perfil(nome: str, bruto: dict, validar_seletor=None) -> Perfil:
 
     if validar_seletor is not None:
         # Checa a sintaxe com o {dim} resolvido numa amostra plausível.
-        amostra = formato.replace(
-            "{dim}", f"[height<={limite}]" if limite else "")
+        amostra = formato.replace("{dim}", f"[height<={limite}]" if limite else "")
         try:
             validar_seletor(amostra)
         except Exception as erro:
@@ -202,8 +206,7 @@ def disponivel(perfil: Perfil, tem_ffmpeg: bool) -> bool:
     return tem_ffmpeg or not perfil.exige_ffmpeg
 
 
-def opcoes_ytdlp(perfil: Perfil, formatos: Sequence[Formato],
-                 destino: str) -> dict:
+def opcoes_ytdlp(perfil: Perfil, formatos: Sequence[Formato], destino: str) -> dict:
     """Monta o dicionário de opções do yt-dlp a partir do perfil.
 
     Recebe os formatos porque o seletor depende da orientação do vídeo

@@ -48,12 +48,24 @@ def h(tmp_path, relogio):
     hist.fechar()
 
 
-def video(video_id="LzS8kB6lIm0", titulo="Camisa azul da Seleção", extractor="Youtube",
-          canal="Canal Michuruca", duracao=65) -> Video:
-    return Video(video_id=video_id, extractor=extractor,
-                 url_canonica=f"https://www.youtube.com/watch?v={video_id}",
-                 titulo=titulo, canal=canal, duracao_s=duracao,
-                 thumbnail_url=None, data_upload="20260901", formatos=())
+def video(
+    video_id="LzS8kB6lIm0",
+    titulo="Camisa azul da Seleção",
+    extractor="Youtube",
+    canal="Canal Michuruca",
+    duracao=65,
+) -> Video:
+    return Video(
+        video_id=video_id,
+        extractor=extractor,
+        url_canonica=f"https://www.youtube.com/watch?v={video_id}",
+        titulo=titulo,
+        canal=canal,
+        duracao_s=duracao,
+        thumbnail_url=None,
+        data_upload="20260901",
+        formatos=(),
+    )
 
 
 def iniciar(h, v=None, perfil="edicao_1080", projeto="pessoal"):
@@ -64,6 +76,7 @@ def iniciar(h, v=None, perfil="edicao_1080", projeto="pessoal"):
 # ===========================================================================
 # Schema
 # ===========================================================================
+
 
 def test_criar_schema_e_idempotente(h):
     h.criar_schema()
@@ -95,6 +108,7 @@ def test_schema_nao_tem_mais_chave_unica(tmp_path, relogio):
 # iniciar — a linha `baixando` que torna o `interrompido` possível
 # ===========================================================================
 
+
 def test_iniciar_grava_baixando_sem_caminho(h):
     r = iniciar(h)
     assert r.status == "baixando"
@@ -107,14 +121,24 @@ def test_iniciar_grava_datas_em_iso8601_utc(h):
 
 def test_iniciar_copia_os_metadados_do_video(h):
     r = iniciar(h)
-    assert (r.video_id, r.extractor, r.titulo) == ("LzS8kB6lIm0", "Youtube", "Camisa azul da Seleção")
-    assert (r.canal, r.duracao_s, r.perfil, r.projeto) == ("Canal Michuruca", 65, "edicao_1080", "pessoal")
+    assert (r.video_id, r.extractor, r.titulo) == (
+        "LzS8kB6lIm0",
+        "Youtube",
+        "Camisa azul da Seleção",
+    )
+    assert (r.canal, r.duracao_s, r.perfil, r.projeto) == (
+        "Canal Michuruca",
+        65,
+        "edicao_1080",
+        "pessoal",
+    )
 
 
 def test_iniciar_com_o_fixture_real(h, info_dict_real):
     v = Video.de_info_dict(info_dict_real)
-    r = h.iniciar(v, perfil="edicao_1080", projeto="pessoal",
-                  url_original=info_dict_real["original_url"])
+    r = h.iniciar(
+        v, perfil="edicao_1080", projeto="pessoal", url_original=info_dict_real["original_url"]
+    )
     assert r.titulo == info_dict_real["title"]
     assert r.url_canonica == info_dict_real["webpage_url"]
     assert r.url_original == info_dict_real["original_url"]
@@ -129,6 +153,7 @@ def test_iniciar_devolve_id_positivo_e_crescente(h):
 # ===========================================================================
 # Decisão 3 — preservação: uma linha por tentativa
 # ===========================================================================
+
 
 def test_reiniciar_a_mesma_chave_cria_UMA_NOVA_LINHA(h):
     """O caso do smoke test: rebaixar não pode apagar o registro anterior."""
@@ -151,8 +176,9 @@ def test_redownload_que_falha_preserva_o_arquivo_anterior(h):
 
     assert h.obter_por_id(a.id).caminho == "D:/F/a.mp4"
     ja = h.ja_baixado("Youtube", "LzS8kB6lIm0", "edicao_1080")
-    assert ja is not None and ja.caminho == "D:/F/a.mp4", \
+    assert ja is not None and ja.caminho == "D:/F/a.mp4", (
         "depois de uma falha, o histórico esqueceu o arquivo que está no disco"
+    )
 
 
 def test_ja_baixado_devolve_a_tentativa_concluida_MAIS_RECENTE(h):
@@ -178,9 +204,9 @@ def test_todo_arquivo_baixado_tem_uma_linha(h):
 # concluir / falhar — por id da tentativa
 # ===========================================================================
 
+
 def test_concluir_preenche_caminho_tamanho_e_data(h):
-    r = h.concluir(iniciar(h).id, caminho="D:/F/x.mp4", tamanho_bytes=12345,
-                   resolucao="1080x1920")
+    r = h.concluir(iniciar(h).id, caminho="D:/F/x.mp4", tamanho_bytes=12345, resolucao="1080x1920")
     assert r.status == "concluido"
     assert (r.caminho, r.tamanho_bytes, r.resolucao) == ("D:/F/x.mp4", 12345, "1080x1920")
     assert r.concluido_em == "2026-09-02T10:00:02+00:00"
@@ -188,8 +214,7 @@ def test_concluir_preenche_caminho_tamanho_e_data(h):
 
 def test_concluir_marcando_que_o_arquivo_ja_existia(h):
     """Decisão 1: sucesso, mas o usuário precisa saber que não baixou."""
-    r = h.concluir(iniciar(h).id, caminho="D:/F/x.mp4", tamanho_bytes=9,
-                   ja_existia=True)
+    r = h.concluir(iniciar(h).id, caminho="D:/F/x.mp4", tamanho_bytes=9, ja_existia=True)
     assert r.status == "concluido" and r.ja_existia is True
     assert r.aviso and "já existia" in r.aviso.lower()
 
@@ -219,6 +244,7 @@ def test_atualizar_registro_inexistente_levanta(h, acao):
 # registrar_destino — decisão 5
 # ===========================================================================
 
+
 def test_registrar_destino_grava_o_caminho_pretendido(h):
     """Sem isto, um `interrompido` não tem caminho e a reconciliação da subida
     não tem onde procurar o arquivo."""
@@ -237,6 +263,7 @@ def test_registrar_destino_inexistente_levanta(h):
 # ===========================================================================
 # avisar — decisões 1, 4 e 5
 # ===========================================================================
+
 
 def test_avisar_grava_e_nao_muda_o_status(h):
     r = iniciar(h)
@@ -266,6 +293,7 @@ def test_avisar_o_mesmo_texto_duas_vezes_nao_duplica(h):
 # ===========================================================================
 # Chaves e consultas
 # ===========================================================================
+
 
 def test_mesmo_video_em_perfis_diferentes_sao_registros_distintos(h):
     iniciar(h, perfil="edicao_1080")
@@ -305,8 +333,13 @@ def test_obter_por_id_inexistente_e_none(h):
 # buscar
 # ===========================================================================
 
+
 def test_buscar_sem_filtro_devolve_tudo_mais_recente_primeiro(h):
-    for vid, titulo in (("aaaaaaaaaaa","Primeiro"), ("bbbbbbbbbbb","Segundo"), ("ccccccccccc","Terceiro")):
+    for vid, titulo in (
+        ("aaaaaaaaaaa", "Primeiro"),
+        ("bbbbbbbbbbb", "Segundo"),
+        ("ccccccccccc", "Terceiro"),
+    ):
         iniciar(h, video(vid, titulo))
     assert [r.titulo for r in h.buscar()] == ["Terceiro", "Segundo", "Primeiro"]
 
@@ -355,10 +388,13 @@ def test_buscar_nao_e_vulneravel_a_curinga_do_like(h, curinga):
     assert h.buscar(termo=curinga) == []
 
 
+# Tabela protegida do formatador: entrada e saída esperada lado a lado.
+# fmt: off
 @pytest.mark.parametrize("entrada,esperado", [
     ("Seleção", "selecao"), ("SELEÇÃO", "selecao"), ("Ação!", "acao!"),
     ("  Rush  B ", "rush b"), ("", ""),
 ])
+# fmt: on
 def test_normalizar_busca(entrada, esperado):
     assert normalizar_busca(entrada) == esperado
 

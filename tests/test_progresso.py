@@ -20,14 +20,18 @@ from src.queue.progresso import AgregadorProgresso
 # Progresso.percentual
 # ===========================================================================
 
-@pytest.mark.parametrize("baixados,total,esperado", [
-    (50, 100, 50.0),
-    (0, 100, 0.0),
-    (100, 100, 100.0),
-    (0, None, None),      # total desconhecido: sem percentual, não NaN
-    (0, 0, None),         # total zero: sem divisão por zero
-    (150, 100, 100.0),    # estimativa abaixo do real: trava em 100
-])
+
+@pytest.mark.parametrize(
+    "baixados,total,esperado",
+    [
+        (50, 100, 50.0),
+        (0, 100, 0.0),
+        (100, 100, 100.0),
+        (0, None, None),  # total desconhecido: sem percentual, não NaN
+        (0, 0, None),  # total zero: sem divisão por zero
+        (150, 100, 100.0),  # estimativa abaixo do real: trava em 100
+    ],
+)
 def test_percentual(baixados, total, esperado):
     p = Progresso(baixados=baixados, total=total, velocidade_bps=None, eta_s=None)
     assert p.percentual == esperado
@@ -37,15 +41,29 @@ def test_percentual(baixados, total, esperado):
 # Progresso.de_hook — toda chave é opcional
 # ===========================================================================
 
+
 def test_de_hook_downloading_completo():
-    p = Progresso.de_hook({"status": "downloading", "downloaded_bytes": 500,
-                           "total_bytes": 1000, "speed": 2048.0, "eta": 7})
+    p = Progresso.de_hook(
+        {
+            "status": "downloading",
+            "downloaded_bytes": 500,
+            "total_bytes": 1000,
+            "speed": 2048.0,
+            "eta": 7,
+        }
+    )
     assert p == Progresso(baixados=500, total=1000, velocidade_bps=2048.0, eta_s=7)
 
 
 def test_de_hook_usa_estimativa_quando_total_falta():
-    p = Progresso.de_hook({"status": "downloading", "downloaded_bytes": 10,
-                           "total_bytes": None, "total_bytes_estimate": 800})
+    p = Progresso.de_hook(
+        {
+            "status": "downloading",
+            "downloaded_bytes": 10,
+            "total_bytes": None,
+            "total_bytes_estimate": 800,
+        }
+    )
     assert p.total == 800
 
 
@@ -80,12 +98,15 @@ def test_de_hook_finished_quando_arquivo_ja_existia():
     assert p.baixados == 500 and p.total == 500
 
 
-@pytest.mark.parametrize("d", [
-    {"status": "error"},
-    {"status": "inventado"},
-    {},
-    {"downloaded_bytes": 5},
-])
+@pytest.mark.parametrize(
+    "d",
+    [
+        {"status": "error"},
+        {"status": "inventado"},
+        {},
+        {"downloaded_bytes": 5},
+    ],
+)
 def test_de_hook_status_desconhecido_ou_erro_devolve_none(d):
     """'Check this first and ignore unknown values' — docstring do yt-dlp."""
     assert Progresso.de_hook(d) is None
@@ -99,6 +120,7 @@ def test_de_hook_nunca_levanta_keyerror():
 # ===========================================================================
 # AgregadorProgresso — soma por stream (format_id)
 # ===========================================================================
+
 
 def p(baixados, total, vel=None, eta=None):
     return Progresso(baixados=baixados, total=total, velocidade_bps=vel, eta_s=eta)
@@ -170,7 +192,7 @@ def test_agregador_e_thread_safe():
             for i in range(200):
                 a.atualizar(fid, p(i, 1000))
                 a.total()
-        except Exception as e:      # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             erros.append(e)
 
     ts = [threading.Thread(target=bater, args=(fid,)) for fid in ("137", "140", "251")]

@@ -105,11 +105,10 @@ class Downloader:
                 return ydl.sanitize_info(bruto)
         except ErroDeDownload:
             raise
-        except Exception as erro:          # nunca BaseException: Ctrl+C sobe
+        except Exception as erro:  # nunca BaseException: Ctrl+C sobe
             raise traduzir(erro) from erro
 
-    def baixar(self, url: str, opcoes: dict,
-               ao_progredir: Callable[[dict], None]) -> str:
+    def baixar(self, url: str, opcoes: dict, ao_progredir: Callable[[dict], None]) -> str:
         """Baixa e devolve o caminho final do arquivo.
 
         `ao_progredir` é registrado como progress_hook. ATENÇÃO: pode ser
@@ -155,10 +154,12 @@ class Downloader:
         if not caminho:
             # Download "concluído" sem caminho seria histórico apontando para
             # o nada. Falha explícita é melhor que sucesso falso.
-            raise ErroDeDownload(Classificacao(
-                MotivoFalha.DESCONHECIDO,
-                "o yt-dlp concluiu sem informar o caminho do arquivo baixado",
-            ))
+            raise ErroDeDownload(
+                Classificacao(
+                    MotivoFalha.DESCONHECIDO,
+                    "o yt-dlp concluiu sem informar o caminho do arquivo baixado",
+                )
+            )
         return str(caminho)
 
 
@@ -175,7 +176,7 @@ def testar_cookies(navegador: str, perfil: str | None = None) -> str | None:
     """
     try:
         yt_dlp.cookies.extract_cookies_from_browser(navegador, perfil)
-    except Exception as erro:              # noqa: BLE001 — qualquer falha
+    except Exception as erro:  # noqa: BLE001 — qualquer falha
         texto = str(erro).strip() or type(erro).__name__
         return texto.split("\n")[0][:300]
     return None

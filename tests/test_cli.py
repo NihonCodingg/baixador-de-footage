@@ -13,8 +13,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.cli import (construir_parser, fmt_bytes, fmt_data, fmt_duracao, main,
-                     relatorio)
+from src.cli import construir_parser, fmt_bytes, fmt_data, fmt_duracao, main, relatorio
 from src.pipeline import Conflito, EntradaInvalida, Pipeline
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -53,22 +52,45 @@ class PipelineFalso:
     def config(self):
         self.chamadas.append(("config",))
         return {
-            "ffmpeg": {"disponivel": True, "completo": True,
-                       "ffmpeg": "C:/x/ffmpeg.exe", "ffprobe": "C:/x/ffprobe.exe"},
+            "ffmpeg": {
+                "disponivel": True,
+                "completo": True,
+                "ffmpeg": "C:/x/ffmpeg.exe",
+                "ffprobe": "C:/x/ffprobe.exe",
+            },
             "perfis": [
-                {"nome": "edicao_1080", "descricao": "1080p H.264 + AAC",
-                 "disponivel": True, "exige_ffmpeg": True,
-                 "limite_dimensao": 1080, "container": "mp4"},
-                {"nome": "so_audio", "descricao": "Só a trilha de áudio",
-                 "disponivel": False, "exige_ffmpeg": True,
-                 "limite_dimensao": None, "container": "m4a"},
+                {
+                    "nome": "edicao_1080",
+                    "descricao": "1080p H.264 + AAC",
+                    "disponivel": True,
+                    "exige_ffmpeg": True,
+                    "limite_dimensao": 1080,
+                    "container": "mp4",
+                },
+                {
+                    "nome": "so_audio",
+                    "descricao": "Só a trilha de áudio",
+                    "disponivel": False,
+                    "exige_ffmpeg": True,
+                    "limite_dimensao": None,
+                    "container": "m4a",
+                },
             ],
             "projetos": [
-                {"nome": "cliente_x", "rotulo": "Cliente X",
-                 "pasta": "D:/FOOTAGE/cliente_x", "valido": True, "motivo": None},
-                {"nome": "quebrado", "rotulo": "Quebrado",
-                 "pasta": "Z:/nao/existe", "valido": False,
-                 "motivo": "a unidade não existe"},
+                {
+                    "nome": "cliente_x",
+                    "rotulo": "Cliente X",
+                    "pasta": "D:/FOOTAGE/cliente_x",
+                    "valido": True,
+                    "motivo": None,
+                },
+                {
+                    "nome": "quebrado",
+                    "rotulo": "Quebrado",
+                    "pasta": "Z:/nao/existe",
+                    "valido": False,
+                    "motivo": "a unidade não existe",
+                },
             ],
         }
 
@@ -83,8 +105,7 @@ class PipelineFalso:
         return self._simulacao
 
     def enfileirar(self, urls, perfil, projeto=None, forcar=False, pasta=None):
-        self.chamadas.append(
-            ("enfileirar", list(urls), perfil, projeto, forcar, pasta))
+        self.chamadas.append(("enfileirar", list(urls), perfil, projeto, forcar, pasta))
         if self._erro:
             raise self._erro
         return [j["id"] for j in self._jobs]
@@ -99,14 +120,25 @@ class PipelineFalso:
 
 def job(**campos):
     base = {
-        "id": "j1", "estado": "concluido", "ja_existia": False,
-        "perfil": "edicao_1080", "projeto": "cliente_x",
+        "id": "j1",
+        "estado": "concluido",
+        "ja_existia": False,
+        "perfil": "edicao_1080",
+        "projeto": "cliente_x",
         "criado_em": "2026-09-02T19:53:58+00:00",
         "url": URL,
-        "video": {"id": "LzS8kB6lIm0", "titulo": "Camisa azul da Seleção",
-                  "canal": "Canal Michuruca", "duracao_s": 65, "thumbnail": None},
-        "progresso": None, "caminho_final": "D:/FOOTAGE/cliente_x/v.mp4",
-        "motivo_falha": None, "mensagem_falha": None, "aviso": None,
+        "video": {
+            "id": "LzS8kB6lIm0",
+            "titulo": "Camisa azul da Seleção",
+            "canal": "Canal Michuruca",
+            "duracao_s": 65,
+            "thumbnail": None,
+        },
+        "progresso": None,
+        "caminho_final": "D:/FOOTAGE/cliente_x/v.mp4",
+        "motivo_falha": None,
+        "mensagem_falha": None,
+        "aviso": None,
     }
     base.update(campos)
     return base
@@ -116,17 +148,24 @@ def job(**campos):
 # Formatação
 # ===========================================================================
 
+
+# Tabela protegida do formatador: entrada e saída esperada lado a lado.
+# fmt: off
 @pytest.mark.parametrize("segundos,esperado", [
     (None, "--:--"), (0, "0:00"), (65, "1:05"), (3725, "1:02:05"), (59.6, "1:00"),
 ])
+# fmt: on
 def test_formata_duracao(segundos, esperado):
     assert fmt_duracao(segundos) == esperado
 
 
+# Tabela protegida do formatador: entrada e saída esperada lado a lado.
+# fmt: off
 @pytest.mark.parametrize("bytes_,esperado", [
     (None, "--"), (0, "0 B"), (900, "900 B"), (9_437_184, "9,0 MB"),
     (11_062_598, "10,6 MB"),   # 10,5501... arredonda para cima
 ])
+# fmt: on
 def test_formata_bytes_com_virgula_decimal(bytes_, esperado):
     assert fmt_bytes(bytes_) == esperado
 

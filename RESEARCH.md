@@ -43,8 +43,8 @@ gerenciador de contexto (`with`).
 import yt_dlp
 
 opcoes = {
-    'quiet': True,
-    'format': 'bv*[height<=1080]+ba/b',
+    "quiet": True,
+    "format": "bv*[height<=1080]+ba/b",
 }
 
 with yt_dlp.YoutubeDL(opcoes) as ydl:
@@ -92,7 +92,7 @@ conter objetos internos (geradores, referências a instâncias do extractor).
 
 ```python
 info = ydl.extract_info(URL, download=False)
-info_limpo = ydl.sanitize_info(info)   # agora dá para json.dumps()
+info_limpo = ydl.sanitize_info(info)  # agora dá para json.dumps()
 ```
 
 **Isso importa muito no seu projeto**, em dois lugares:
@@ -320,10 +320,10 @@ de diagnosticar sem saber a causa.
 ## 3.1 Assinatura
 
 ```python
-def meu_hook(d: dict) -> None:
-    ...
+def meu_hook(d: dict) -> None: ...
 
-opcoes = {'progress_hooks': [meu_hook]}
+
+opcoes = {"progress_hooks": [meu_hook]}
 ```
 
 Uma função, um argumento (um `dict`), retorno ignorado. É uma lista, então dá para
@@ -381,7 +381,7 @@ Eu segui o caminho no código-fonte.
 
 ```python
 def _hook_progress(self, status, info_dict):
-    status['info_dict'] = info_dict
+    status["info_dict"] = info_dict
     for ph in self._progress_hooks:
         ph(status)
 ```
@@ -514,7 +514,8 @@ Isso é robusto (confirma que o binário roda de verdade) mas custa criar um pro
 
 ```python
 import shutil
-caminho = shutil.which('ffmpeg')   # None se não achar
+
+caminho = shutil.which("ffmpeg")  # None se não achar
 ```
 
 🧪 Na sua máquina retorna:
@@ -530,8 +531,9 @@ C:\Users\Pichau\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_...\bin\ffmp
 
 ```python
 from yt_dlp.postprocessor.ffmpeg import FFmpegPostProcessor
+
 pp = FFmpegPostProcessor(ydl)
-pp.available          # bool
+pp.available  # bool
 FFmpegPostProcessor.get_versions(ydl)
 ```
 
@@ -588,8 +590,12 @@ Exception
 🔬 `YoutubeDL.py`, método `trouble()`:
 
 ```python
-if not self.params.get('ignoreerrors'):
-    if sys.exc_info()[0] and hasattr(sys.exc_info()[1], 'exc_info') and sys.exc_info()[1].exc_info[0]:
+if not self.params.get("ignoreerrors"):
+    if (
+        sys.exc_info()[0]
+        and hasattr(sys.exc_info()[1], "exc_info")
+        and sys.exc_info()[1].exc_info[0]
+    ):
         exc_info = sys.exc_info()[1].exc_info
     else:
         exc_info = sys.exc_info()
@@ -824,14 +830,14 @@ porque o yt-dlp não resolve esse problema.
 
 ```python
 {
-    'id':         '39',          # opcional
-    'url':        'https://...', # sempre
-    'ext':        'jpg',         # opcional
-    'preference': 1,             # opcional, int — qualidade
-    'width':      1920,          # opcional
-    'height':     1080,          # opcional
-    'filesize':   12345,         # opcional
-    'http_headers': {...},       # headers necessários para o GET
+    "id": "39",  # opcional
+    "url": "https://...",  # sempre
+    "ext": "jpg",  # opcional
+    "preference": 1,  # opcional, int — qualidade
+    "width": 1920,  # opcional
+    "height": 1080,  # opcional
+    "filesize": 12345,  # opcional
+    "http_headers": {...},  # headers necessários para o GET
 }
 ```
 
@@ -841,8 +847,8 @@ qualidade.
 **Como usar no `POST /api/inspecionar`:**
 
 ```python
-info = ydl.extract_info(url, download=False)   # não baixa mídia
-thumb = info.get('thumbnail')                  # string ou None
+info = ydl.extract_info(url, download=False)  # não baixa mídia
+thumb = info.get("thumbnail")  # string ou None
 ```
 
 Você devolve essa URL no JSON e o `<img src="...">` do navegador busca a imagem

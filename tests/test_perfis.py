@@ -21,21 +21,26 @@ from src.domain.perfis import (
 )
 
 
-def fmt(largura=None, altura=None, format_id="x", ext="mp4",
-        vcodec="avc1.64", acodec="mp4a.40.2"):
+def fmt(largura=None, altura=None, format_id="x", ext="mp4", vcodec="avc1.64", acodec="mp4a.40.2"):
     """Formato mínimo para os testes de orientação."""
     return Formato(
-        format_id=format_id, ext=ext,
+        format_id=format_id,
+        ext=ext,
         resolucao=f"{largura}x{altura}" if largura else None,
-        largura=largura, altura=altura,
-        fps=None, vcodec=vcodec, acodec=acodec,
-        tbr=None, tamanho_bytes=None,
+        largura=largura,
+        altura=altura,
+        fps=None,
+        vcodec=vcodec,
+        acodec=acodec,
+        tbr=None,
+        tamanho_bytes=None,
     )
 
 
 # ===========================================================================
 # campo_limite — a decisão de orientação
 # ===========================================================================
+
 
 def test_vertical_usa_width():
     """Short 1080x1920: a menor dimensão é a largura."""
@@ -61,8 +66,10 @@ def test_quadrado_usa_height():
 
 def test_lista_so_de_audio_devolve_none():
     """Sem nenhuma dimensão, o filtro é omitido do seletor."""
-    sem_dim = [fmt(None, None, format_id="140", vcodec="none"),
-               fmt(None, None, format_id="251", vcodec="none")]
+    sem_dim = [
+        fmt(None, None, format_id="140", vcodec="none"),
+        fmt(None, None, format_id="251", vcodec="none"),
+    ]
     assert campo_limite(sem_dim) is None
 
 
@@ -72,9 +79,11 @@ def test_lista_vazia_devolve_none():
 
 def test_formatos_sem_dimensao_sao_ignorados():
     """Mistos: os só-áudio não podem influenciar a decisão de orientação."""
-    mistos = [fmt(None, None, format_id="140", vcodec="none"),
-              fmt(1080, 1920, format_id="137"),
-              fmt(None, None, format_id="251", vcodec="none")]
+    mistos = [
+        fmt(None, None, format_id="140", vcodec="none"),
+        fmt(1080, 1920, format_id="137"),
+        fmt(None, None, format_id="251", vcodec="none"),
+    ]
     assert campo_limite(mistos) == "width"
 
 
@@ -97,11 +106,18 @@ def test_dimensao_zero_e_tratada_como_ausente():
 # resolver_dim / resolver_format — a substituição do template
 # ===========================================================================
 
+
 def perfil(format_, limite):
-    return Perfil(nome="t", descricao="", format=format_,
-                  limite_dimensao=limite, format_sort=(),
-                  merge_output_format="mp4", postprocessors=(),
-                  exige_ffmpeg=True)
+    return Perfil(
+        nome="t",
+        descricao="",
+        format=format_,
+        limite_dimensao=limite,
+        format_sort=(),
+        merge_output_format="mp4",
+        postprocessors=(),
+        exige_ffmpeg=True,
+    )
 
 
 def test_dim_vertical():
@@ -146,13 +162,18 @@ def test_format_sem_dimensao_fica_sintaticamente_valido():
 # REGRESSÃO — trava o resultado medido com o motor real do yt-dlp
 # ===========================================================================
 
+
 def _para_formato(bruto: dict) -> Formato:
     return Formato(
-        format_id=bruto.get("format_id"), ext=bruto.get("ext"),
+        format_id=bruto.get("format_id"),
+        ext=bruto.get("ext"),
         resolucao=bruto.get("resolution"),
-        largura=bruto.get("width"), altura=bruto.get("height"),
-        fps=bruto.get("fps"), vcodec=bruto.get("vcodec"),
-        acodec=bruto.get("acodec"), tbr=bruto.get("tbr"),
+        largura=bruto.get("width"),
+        altura=bruto.get("height"),
+        fps=bruto.get("fps"),
+        vcodec=bruto.get("vcodec"),
+        acodec=bruto.get("acodec"),
+        tbr=bruto.get("tbr"),
         tamanho_bytes=bruto.get("filesize") or bruto.get("filesize_approx"),
     )
 
@@ -165,18 +186,18 @@ def _selecionar(formatos_brutos, seletor, format_sort):
     """
     import yt_dlp
 
-    ydl = yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True,
-                            "format": seletor, "format_sort": list(format_sort)})
+    ydl = yt_dlp.YoutubeDL(
+        {"quiet": True, "no_warnings": True, "format": seletor, "format_sort": list(format_sort)}
+    )
     fs = copy.deepcopy(formatos_brutos)
     ydl.sort_formats({"formats": fs, "_format_sort_fields": None})
 
     ctx = {
         "formats": fs,
-        "has_merged_format": any(
-            "none" not in (f.get("acodec"), f.get("vcodec")) for f in fs),
+        "has_merged_format": any("none" not in (f.get("acodec"), f.get("vcodec")) for f in fs),
         "incomplete_formats": (
-            all(f.get("vcodec") == "none" for f in fs)
-            or all(f.get("acodec") == "none" for f in fs)),
+            all(f.get("vcodec") == "none" for f in fs) or all(f.get("acodec") == "none" for f in fs)
+        ),
     }
     return list(ydl.build_format_selector(seletor)(ctx))
 
@@ -189,9 +210,9 @@ def perfil_real():
     quebra.
     """
     from pathlib import Path
+
     raiz = Path(__file__).resolve().parent.parent
-    dados = yaml.safe_load(
-        (raiz / "config" / "perfis.yaml").read_text(encoding="utf-8"))
+    dados = yaml.safe_load((raiz / "config" / "perfis.yaml").read_text(encoding="utf-8"))
     p = dados["perfis"]["edicao_1080"]
     return perfil(p["format"], p["limite_dimensao"]), tuple(p["format_sort"])
 
@@ -211,8 +232,9 @@ def test_regressao_short_vertical_seleciona_1080x1920(info_dict_real, perfil_rea
     p, sort = perfil_real
     brutos = [f for f in info_dict_real["formats"] if f.get("ext") != "mhtml"]
 
-    assert campo_limite([_para_formato(f) for f in brutos]) == "width", \
+    assert campo_limite([_para_formato(f) for f in brutos]) == "width", (
         "o vídeo do fixture é um Short vertical"
+    )
 
     seletor = resolver_format(p, [_para_formato(f) for f in brutos])
     assert "[width<=1080]" in seletor
@@ -224,18 +246,19 @@ def test_regressao_short_vertical_seleciona_1080x1920(info_dict_real, perfil_rea
     assert len(escolhidos) == 1, f"esperado 1 formato mesclado, veio {len(escolhidos)}"
     merged = escolhidos[0]
 
-    assert merged["format_id"] == "137+140", \
-        f"esperado 137+140, veio {merged['format_id']}"
-    assert (merged["width"], merged["height"]) == (1080, 1920), \
+    assert merged["format_id"] == "137+140", f"esperado 137+140, veio {merged['format_id']}"
+    assert (merged["width"], merged["height"]) == (1080, 1920), (
         f"esperado 1080x1920, veio {merged['width']}x{merged['height']}"
-    assert merged["vcodec"].startswith("avc1"), \
+    )
+    assert merged["vcodec"].startswith("avc1"), (
         f"edicao_1080 deve preferir H.264, veio {merged['vcodec']}"
-    assert merged["acodec"].startswith("mp4a"), \
+    )
+    assert merged["acodec"].startswith("mp4a"), (
         f"edicao_1080 deve preferir AAC, veio {merged['acodec']}"
+    )
 
     componentes = [f["format_id"] for f in merged["requested_formats"]]
-    assert componentes == ["137", "140"], \
-        f"componentes do merge inesperados: {componentes}"
+    assert componentes == ["137", "140"], f"componentes do merge inesperados: {componentes}"
 
 
 def test_regressao_o_filtro_antigo_de_altura_degradava(info_dict_real):
@@ -246,11 +269,11 @@ def test_regressao_o_filtro_antigo_de_altura_degradava(info_dict_real):
     comportamento e vale reavaliar a solução.
     """
     brutos = [f for f in info_dict_real["formats"] if f.get("ext") != "mhtml"]
-    antigo = ("bv*[height<=1080][vcodec^=avc1]+ba[acodec^=mp4a]"
-              "/bv*[height<=1080]+ba/b[height<=1080]/b")
+    antigo = (
+        "bv*[height<=1080][vcodec^=avc1]+ba[acodec^=mp4a]/bv*[height<=1080]+ba/b[height<=1080]/b"
+    )
 
-    escolhidos = _selecionar(brutos, antigo,
-                             ["res:1080", "vcodec:h264", "acodec:aac", "fps"])
+    escolhidos = _selecionar(brutos, antigo, ["res:1080", "vcodec:h264", "acodec:aac", "fps"])
     video = next(f for f in escolhidos if f.get("width"))
 
     assert (video["width"], video["height"]) == (480, 854), (
@@ -263,8 +286,8 @@ def test_regressao_o_filtro_antigo_de_altura_degradava(info_dict_real):
 # GRUPO B — Carga e validação de perfis (SPEC 6.2)
 # ===========================================================================
 
-from src.domain.erros import PerfilInvalido          # noqa: E402
-from src.domain.perfis import (                      # noqa: E402
+from src.domain.erros import PerfilInvalido  # noqa: E402
+from src.domain.perfis import (  # noqa: E402
     carregar_perfis,
     disponivel,
     validar_perfil,
@@ -292,9 +315,14 @@ def test_b1_perfil_bom_carrega():
     assert p.nome == "x" and p.limite_dimensao == 1080
 
 
-@pytest.mark.parametrize("bruto", [
-    com(format=None), com(format=""), com(format="   "),
-])
+@pytest.mark.parametrize(
+    "bruto",
+    [
+        com(format=None),
+        com(format=""),
+        com(format="   "),
+    ],
+)
 def test_b2_format_ausente_ou_vazio(bruto):
     with pytest.raises(PerfilInvalido):
         validar_perfil("x", bruto)
@@ -319,8 +347,9 @@ def test_b5_postprocessor_inexistente_falha_na_carga():
 
 
 def test_b5b_postprocessor_real_e_aceito():
-    p = validar_perfil("x", com(postprocessors=[
-        {"key": "FFmpegExtractAudio", "preferredcodec": "m4a"}]))
+    p = validar_perfil(
+        "x", com(postprocessors=[{"key": "FFmpegExtractAudio", "preferredcodec": "m4a"}])
+    )
     assert p.postprocessors[0]["key"] == "FFmpegExtractAudio"
 
 
@@ -339,13 +368,13 @@ def test_b6b_perfil_que_nao_exige_ffmpeg_fica_disponivel():
 def test_b7_seletor_que_nao_parseia_falha_na_carga():
     """Validação sintática entra INJETADA: chamar build_format_selector aqui
     seria importar yt_dlp no domínio, o que a REGRA 1 proíbe."""
+
     def validador(seletor):
         if "[[[" in seletor:
             raise ValueError("colchete desbalanceado")
 
     with pytest.raises(PerfilInvalido):
-        validar_perfil("x", com(format="bv*{dim}[[[+ba"),
-                       validar_seletor=validador)
+        validar_perfil("x", com(format="bv*{dim}[[[+ba"), validar_seletor=validador)
 
 
 def test_b7b_sem_validador_a_sintaxe_nao_e_checada():
@@ -380,9 +409,9 @@ def test_b10_yaml_degenerado(dados):
 def test_b11_carrega_os_quatro_perfis_reais():
     """Lê o config/perfis.yaml de verdade."""
     from pathlib import Path
+
     raiz = Path(__file__).resolve().parent.parent
-    dados = yaml.safe_load(
-        (raiz / "config" / "perfis.yaml").read_text(encoding="utf-8"))
+    dados = yaml.safe_load((raiz / "config" / "perfis.yaml").read_text(encoding="utf-8"))
     perfis = carregar_perfis(dados)
     assert set(perfis) == {"edicao_1080", "edicao_4k", "so_audio", "preview_leve"}
     assert perfis["so_audio"].limite_dimensao is None
@@ -411,7 +440,7 @@ def test_b13_perfil_inexistente_no_conjunto():
 #  lista revisada; é montagem de dict, coberta indiretamente por resolver_format)
 # ===========================================================================
 
-from src.domain.perfis import opcoes_ytdlp       # noqa: E402
+from src.domain.perfis import opcoes_ytdlp  # noqa: E402
 
 
 def test_opcoes_ytdlp_monta_o_dict_com_seletor_resolvido():
