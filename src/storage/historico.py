@@ -95,8 +95,25 @@ def _juntar_avisos(atual: str | None, novo: str) -> str:
     return " | ".join(partes)
 
 
+@dataclass(frozen=True)
+class _Resultado:
+    """O que sai de `_executar`: dados já lidos, com o lock ainda seguro.
+
+    Nunca o cursor. As linhas são `sqlite3.Row` já materializadas — ler um
+    campo delas não toca mais o SQLite, então pode acontecer fora do lock.
+    """
+
+    linhas: list[sqlite3.Row]
+    rowcount: int
+    lastrowid: int | None
+
+
 class Historico:
-    """Uma conexão, um lock. O worker grava enquanto a web lê."""
+    """Uma conexão, um lock. O worker grava enquanto a web lê.
+
+    O lock cobre cada operação INTEIRA — da chamada até a última linha lida.
+    Nenhum cursor sai de dentro dele: é o que `_executar` garante (ADR 0001).
+    """
 
     def __init__(self, caminho_db: Path | str, agora: Callable[[], str] | None = None):
         self._caminho = Path(caminho_db)
@@ -108,7 +125,9 @@ class Historico:
         self._caminho.parent.mkdir(parents=True, exist_ok=True)
 
         # check_same_thread=False porque a conexão é usada pelo worker e pela
-        # web; a serialização é o lock desta classe, não o do sqlite3.
+        # web; a serialização é o lock desta classe, não o do sqlite3. Para
+        # isso valer, o lock tem que cobrir também a LEITURA das linhas — um
+        # cursor é um handle vivo, e fetch() roda código C com o GIL solto.
         self._con = sqlite3.connect(str(self._caminho), check_same_thread=False)
         self._con.row_factory = sqlite3.Row
 
@@ -118,12 +137,19 @@ class Historico:
         if self._fechado:
             raise RuntimeError("Histórico já fechado; abra uma nova instância.")
 
-    def _executar(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
+    def _executar(self, sql: str, params: tuple = ()) -> _Resultado:
+        """Executa, LÊ todas as linhas e confirma — tudo com o lock seguro.
+
+        A leitura fica aqui de propósito. Cobrir só o execute() e devolver o
+        cursor deixava fetchone()/fetchall() rodando com o lock já solto, e
+        outra thread entrava na mesma conexão no meio da leitura (ADR 0001).
+        """
         with self._lock:
             self._exigir_aberto()
             cursor = self._con.execute(sql, params)
+            linhas = cursor.fetchall()
             self._con.commit()
-            return cursor
+            return _Resultado(linhas, cursor.rowcount, cursor.lastrowid)
 
     @staticmethod
     def _linha(row: sqlite3.Row | None) -> RegistroHistorico | None:
@@ -148,8 +174,8 @@ class Historico:
 
     def _atualizar(self, registro_id: int, sql: str, params: tuple) -> RegistroHistorico:
         with self._lock:
-            cursor = self._executar(sql, params)
-            if cursor.rowcount == 0:
+            resultado = self._executar(sql, params)
+            if resultado.rowcount == 0:
                 raise RegistroNaoEncontrado(f"tentativa {registro_id} não existe")
             return self.obter_por_id(registro_id)
 
@@ -164,7 +190,7 @@ class Historico:
         está no disco continua lá.
         """
         with self._lock:
-            cursor = self._executar(
+            resultado = self._executar(
                 """
                 INSERT INTO historico (
                     extractor, video_id, perfil, url_original, url_canonica,
@@ -188,7 +214,7 @@ class Historico:
                     self._agora(),
                 ),
             )
-            return self.obter_por_id(cursor.lastrowid)
+            return self.obter_por_id(resultado.lastrowid)
 
     def registrar_destino(self, registro_id: int, caminho: str) -> RegistroHistorico:
         """Grava o caminho PRETENDIDO, antes do download.
@@ -274,7 +300,9 @@ class Historico:
         with self._lock:
             ids = [
                 row["id"]
-                for row in self._executar("SELECT id FROM historico WHERE status = 'baixando'")
+                for row in self._executar(
+                    "SELECT id FROM historico WHERE status = 'baixando'"
+                ).linhas
             ]
             if not ids:
                 return []
@@ -288,8 +316,8 @@ class Historico:
     # --------------------------------------------------------------- leitura
 
     def obter_por_id(self, registro_id: int) -> RegistroHistorico | None:
-        cursor = self._executar("SELECT * FROM historico WHERE id = ?", (registro_id,))
-        return self._linha(cursor.fetchone())
+        linhas = self._executar("SELECT * FROM historico WHERE id = ?", (registro_id,)).linhas
+        return self._linha(linhas[0] if linhas else None)
 
     def ja_baixado(self, extractor: str, video_id: str, perfil: str) -> RegistroHistorico | None:
         """A tentativa CONCLUÍDA mais recente da tripla, ou None.
@@ -298,15 +326,15 @@ class Historico:
         arquivo que está no disco, então continua devolvendo a conclusão
         anterior.
         """
-        cursor = self._executar(
+        linhas = self._executar(
             """
             SELECT * FROM historico
              WHERE extractor = ? AND video_id = ? AND perfil = ? AND status = 'concluido'
              ORDER BY criado_em DESC, id DESC LIMIT 1
             """,
             (extractor, video_id, perfil),
-        )
-        return self._linha(cursor.fetchone())
+        ).linhas
+        return self._linha(linhas[0] if linhas else None)
 
     def buscar(
         self, termo: str | None = None, projeto: str | None = None, limite: int = 100
@@ -330,5 +358,4 @@ class Historico:
         sql += " ORDER BY criado_em DESC, id DESC LIMIT ?"
         params.append(int(limite))
 
-        cursor = self._executar(sql, tuple(params))
-        return [self._linha(row) for row in cursor.fetchall()]
+        return [self._linha(row) for row in self._executar(sql, tuple(params)).linhas]
