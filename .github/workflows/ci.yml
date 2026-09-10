@@ -16,10 +16,12 @@ jobs:
     name: Testes — Python ${{ matrix.python }}
     runs-on: windows-latest
     strategy:
-      # Sem fail-fast: se a 3.12 quebrar, ainda quero ver o resultado da 3.13.
+      # Sem fail-fast: se uma versão quebrar, ainda quero ver as outras.
+      # 3.14 entrou na matriz depois de passar estável no job experimental,
+      # com as dependências instalando limpo e a corrida do ADR 0001 corrigida.
       fail-fast: false
       matrix:
-        python: ["3.12", "3.13"]
+        python: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
 
