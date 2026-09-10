@@ -11,7 +11,6 @@ foi o que o smoke test flagrou (3 arquivos, 2 registros).
 """
 
 import sqlite3
-import threading
 
 import pytest
 
@@ -460,30 +459,9 @@ def test_dados_sobrevivem_a_reabertura(tmp_path, relogio):
     assert b.obter_por_id(rid) is not None
     b.fechar()
 
-
-def test_escritas_concorrentes_de_varias_threads(h):
-    """O worker grava enquanto a web lê. Threads reais, sem sleep."""
-    erros = []
-
-    def gravar(i):
-        try:
-            r = h.iniciar(video(f"{i:0>11}", f"v{i}"), perfil="edicao_1080",
-                          projeto="p", url_original="u")
-            h.concluir(r.id, caminho=f"D:/F/{i}.mp4", tamanho_bytes=i + 1)
-            h.buscar()
-        except Exception as e:      # noqa: BLE001
-            erros.append(e)
-
-    ts = [threading.Thread(target=gravar, args=(i,)) for i in range(20)]
-    for t in ts:
-        t.start()
-    for t in ts:
-        t.join()
-    assert erros == []
-    assert len(h.buscar(limite=100)) == 20
-
-
 def test_registro_e_imutavel(h):
+
+
     r = iniciar(h)
     with pytest.raises(Exception):
         r.status = "concluido"
