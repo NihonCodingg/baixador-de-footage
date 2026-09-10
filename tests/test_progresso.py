@@ -15,7 +15,6 @@ import pytest
 from src.domain.models import Progresso
 from src.queue.progresso import AgregadorProgresso
 
-
 # ===========================================================================
 # Progresso.percentual
 # ===========================================================================

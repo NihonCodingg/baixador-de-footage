@@ -230,8 +230,9 @@ from src.download.adapter import validar_seletor  # noqa: E402
 
 
 def test_validar_seletor_aceita_os_quatro_perfis_reais():
-    import yaml
     from pathlib import Path
+
+    import yaml
 
     raiz = Path(__file__).resolve().parent.parent
     perfis = yaml.safe_load((raiz / "config" / "perfis.yaml").read_text(encoding="utf-8"))["perfis"]
@@ -298,6 +299,7 @@ def test_a_lista_de_navegadores_vem_do_ytdlp():
     """Copiar a lista para cá deixaria a validação desatualizar em silêncio
     quando o yt-dlp mudar."""
     import yt_dlp.cookies
+
     from src.download.adapter import NAVEGADORES
 
     assert set(NAVEGADORES) == set(yt_dlp.cookies.SUPPORTED_BROWSERS)

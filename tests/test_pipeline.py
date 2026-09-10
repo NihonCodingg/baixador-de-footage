@@ -15,9 +15,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.domain.models import ESTADOS_TERMINAIS, EstadoJob
-from src.download.traducao_erros import Classificacao, ErroDeDownload
 from src.domain.erros import MotivoFalha
+from src.domain.models import ESTADOS_TERMINAIS
+from src.download.traducao_erros import Classificacao, ErroDeDownload
 from src.pipeline import Conflito, EntradaInvalida, NaoEncontrado, Pipeline
 from src.storage.historico import Historico
 

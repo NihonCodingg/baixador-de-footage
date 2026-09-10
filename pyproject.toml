@@ -1,0 +1,34 @@
+# Configuração de ferramentas.
+#
+# Este projeto NÃO é um pacote publicável: ele roda a partir da raiz e as
+# dependências vivem em requirements.txt / requirements-dev.txt, cada uma com a
+# justificativa ao lado. Este arquivo existe só para configurar o ruff, que a
+# CI executa.
+
+[tool.ruff]
+# 100 e não os 88 do padrão porque é o que o código já praticava: com 88 seriam
+# 77 linhas longas, ou seja, dobrar o código para a ferramenta em vez do
+# contrário.
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Conjunto inicial: erros do pycodestyle (E), pyflakes (F) e ordenação de
+# imports (I). É o baseline clássico de lint em Python.
+#
+# NADA foi desligado para a CI passar: não há `ignore` e não há
+# `per-file-ignores`. O que este conjunto acusou foi corrigido no código.
+select = ["E", "F", "I"]
+
+# ---------------------------------------------------------------------------
+# TRABALHO FUTURO — ligar `S` (bandit) e `BLE` (except cego)
+# ---------------------------------------------------------------------------
+# O código já tem `# noqa: S603`, `# noqa: S606` e `# noqa: BLE001` espalhados,
+# escritos prevendo essas duas famílias. Só que a configuração nunca foi
+# commitada, então hoje eles são noqa ÓRFÃOS: silenciam regra que não está
+# ligada. Foi assim que apareceram — o ruff acusou 16 `RUF100 unused-noqa` na
+# primeira vez que rodou aqui.
+#
+# O próximo passo é ligar `S` e `BLE` e tratar cada ponto de verdade: ou o
+# `# noqa` ganha justificativa que se sustenta, ou o código muda. O que não
+# vale é manter o silenciador sem a regra do outro lado.

@@ -144,7 +144,7 @@ def test_a8_id_nu_e_rejeitado():
         normalizar_link(ID)
 
 
-# Tabela protegida do formatador: linha 1 é lixo textual, linha 2 são esquemas perigosos ou incompletos.
+# Tabela protegida do formatador: linha 1 é lixo textual, linha 2 são esquemas perigosos.
 # fmt: off
 @pytest.mark.parametrize("entrada", [
     "", "   ", "não é url", "isso aqui é uma frase", "ftp://exemplo.com/x",

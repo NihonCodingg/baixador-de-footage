@@ -30,8 +30,8 @@ from .download.ffmpeg import detectar
 from .download.traducao_erros import ErroDeDownload
 from .queue.fila import Fila
 from .queue.worker import Preparacao, Worker
-from .storage.historico import Historico
 from .storage import cookies_yaml, projetos_yaml
+from .storage.historico import Historico
 
 _ATIVOS = (EstadoJob.NA_FILA, EstadoJob.BAIXANDO)
 

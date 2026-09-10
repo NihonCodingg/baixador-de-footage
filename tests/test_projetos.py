@@ -57,6 +57,7 @@ def test_pasta_e_normalizada_sem_barra_final():
 def test_carrega_o_arquivo_real():
     """Lê config/projetos.yaml de verdade: editar o arquivo quebra o teste."""
     from pathlib import Path
+
     import yaml
 
     raiz = Path(__file__).resolve().parent.parent

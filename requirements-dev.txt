@@ -6,3 +6,8 @@ pytest>=8.0
 
 # Cliente de teste para as rotas do FastAPI, sem subir servidor.
 httpx>=0.27
+
+# Linter e formatador — os mesmos que a CI roda. Versão FIXADA, não com piso:
+# o ruff ganha regras novas a cada release, e com `>=` um commit que passa hoje
+# quebraria amanhã sem ninguém ter tocado no código.
+ruff==0.16.6

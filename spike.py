@@ -31,7 +31,6 @@ from pathlib import Path
 
 import yt_dlp
 
-
 # ---------------------------------------------------------------------------
 # Sem isto, imprimir o título de um vídeo quebra no console do Windows.
 #
