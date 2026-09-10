@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  testes:
+    name: Testes — Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      # Sem fail-fast: se a 3.12 quebrar, ainda quero ver o resultado da 3.13.
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      # A suíte não toca a rede, mas toca o ffmpeg: tests/test_ffmpeg.py tem um
+      # teste marcado com skipif que só roda quando o binário existe no PATH.
+      # Sem este passo ele seria PULADO em silêncio, e o CI ficaria verde sem
+      # ter verificado a detecção de verdade.
+      - name: Instalar ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Instalar dependências
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Testes
+        run: python -m pytest tests/ -q
+
+  qualidade:
+    name: Lint e formatação
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Só o ruff: este job não roda teste, não precisa de ffmpeg nem do yt-dlp.
+      - name: Instalar ruff
+        run: python -m pip install ruff==0.16.6
+
+      - name: ruff check
+        run: ruff check .
+
+      - name: ruff format
+        run: ruff format --check .
+
+  testes-3-14:
+    # A versão que roda na máquina do autor. Fica FORA da matriz principal e
+    # com continue-on-error porque é a mais nova: se uma dependência ainda não
+    # tiver wheel para 3.14, o build falha por causa do ecossistema, não do
+    # código. Quando este job passar de forma estável, 3.14 sobe para a matriz
+    # de cima e este bloco desaparece.
+    name: Testes — Python 3.14 (experimental)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Instalar ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Instalar dependências
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Testes
+        run: python -m pytest tests/ -q
