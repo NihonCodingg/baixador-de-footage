@@ -1,5 +1,9 @@
 # Baixador de Footage
 
+[![CI](https://github.com/NihonCodingg/baixador-de-footage/actions/workflows/ci.yml/badge.svg)](https://github.com/NihonCodingg/baixador-de-footage/actions/workflows/ci.yml)
+[![testes](https://img.shields.io/badge/testes-744-brightgreen)](tests/)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue)](pyproject.toml)
+
 Aplicação local com interface web para baixar footage de vídeo destinado a
 edição, construída sobre a biblioteca [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 
@@ -32,7 +36,7 @@ O que existe hoje:
 
 As instruções de execução abaixo descrevem o que funciona hoje.
 
-Suíte atual: **637 testes**. Rodar:
+Suíte atual: **744 testes**. Rodar:
 
 ```bash
 python -m pytest tests/ -v
@@ -110,7 +114,6 @@ para contornar a proteção.
 
 | Camada | Escolha | Motivo |
 |---|---|---|
-| Linguagem | Python 3.14 | — |
 | Download | `yt-dlp` como **biblioteca** (`import yt_dlp`) | Nunca via `subprocess`. Chamar o executável obrigaria a parsear stdout, que o próprio projeto avisa não ser estável. |
 | Back-end web | FastAPI | Só orquestração e JSON; nenhuma regra de negócio. |
 | Persistência | SQLite (`sqlite3`, biblioteca padrão) | Histórico de um usuário local. Não justifica um servidor de banco. |
@@ -142,7 +145,7 @@ winget install Gyan.FFmpeg
 > Antes de rodar, ajuste `config/projetos.yaml` para as suas pastas — ou
 > cadastre-as pelo botão **Projetos** da interface.
 
-Requisitos: Python 3.12+ e `ffmpeg` no `PATH`.
+Requisitos: Python 3.12+ (desenvolvido na 3.14) e `ffmpeg` no `PATH`.
 
 ```bash
 python -m venv .venv
