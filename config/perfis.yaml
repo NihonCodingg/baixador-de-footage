@@ -45,6 +45,22 @@ perfis:
     postprocessors: []
     exige_ffmpeg: true
 
+  maxima:
+    descricao: "O melhor que o site tiver, sem teto — VP9/AV1, pode exigir transcode"
+    # SEM TETO: nenhum {dim}, e por isso limite_dimensao é null (a carga
+    # recusa um format com {dim} e limite null, e vice-versa).
+    # Use quando o que importa é pegar o máximo, inclusive acima de 2160p.
+    limite_dimensao: null
+    format: "bv*+ba/b"
+    # `res` no yt-dlp é a MENOR dimensão — a mesma medida do teto dos outros
+    # perfis (SPEC 6.3). Sem valor, ordena da maior para a menor.
+    format_sort: ["res", "fps", "vcodec:vp9", "acodec:aac"]
+    # mkv pelo mesmo motivo do edicao_4k: acima de 1080p só existe VP9/AV1,
+    # e o mkv aceita qualquer combinação sem atrito.
+    merge_output_format: "mkv"
+    postprocessors: []
+    exige_ffmpeg: true
+
   so_audio:
     descricao: "Só a trilha de áudio, em m4a"
     limite_dimensao: null          # não usa dimensão

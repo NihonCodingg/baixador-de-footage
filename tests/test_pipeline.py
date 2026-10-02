@@ -169,6 +169,7 @@ def test_config_lista_perfis_projetos_e_ffmpeg(subir):
     assert {x["nome"] for x in c["perfis"]} == {
         "edicao_1080",
         "edicao_4k",
+        "maxima",
         "so_audio",
         "preview_leve",
     }
@@ -1291,3 +1292,54 @@ def test_estado_fila_expoe_a_url_colada(subir):
     ids = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
     j = next(x for x in p.estado_fila() if x["id"] == ids[0])
     assert j["url"] == URL_REAL
+
+
+# ===========================================================================
+# Aviso de resolução abaixo do perfil — ponta a ponta, do hook ao histórico
+# ===========================================================================
+
+
+def _finished(largura, altura):
+    """O 'finished' do stream de vídeo, como o yt-dlp emite: é dele que sai a
+    resolução REAL que o worker grava."""
+    return {
+        "status": "finished",
+        "downloaded_bytes": 10,
+        "total_bytes": 10,
+        "info_dict": {"format_id": "137", "width": largura, "height": altura},
+    }
+
+
+def test_resolucao_abaixo_do_perfil_avisa_na_fila_e_no_historico(subir, info_dict_real):
+    """Pedi 1080 e veio 720: o aviso tem que estar nos DOIS lugares — a fila é
+    da sessão e some ao fechar; o histórico é o que fica."""
+    p, _ = subir(downloader=DownloaderEco(info_dict_real, eventos=[_finished(1280, 720)]))
+    job = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")[0])
+
+    assert job["estado"] == "concluido", "receber menos que o teto não é falha"
+    assert job["aviso"] and "1280x720" in job["aviso"]
+    registro = p.historico()[0]
+    assert registro["resolucao"] == "1280x720"
+    assert registro["aviso"] and "1080" in registro["aviso"]
+
+
+def test_resolucao_no_teto_nao_avisa(subir, info_dict_real):
+    p, _ = subir(downloader=DownloaderEco(info_dict_real, eventos=[_finished(1920, 1080)]))
+    job = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")[0])
+    assert not job["aviso"]
+    assert not p.historico()[0]["aviso"]
+
+
+def test_perfil_sem_teto_nunca_avisa_de_resolucao(subir, info_dict_real):
+    """`maxima` não promete resolução: 144p ali é só o que o site tinha."""
+    p, _ = subir(downloader=DownloaderEco(info_dict_real, eventos=[_finished(256, 144)]))
+    job = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="maxima", projeto="pessoal")[0])
+    assert job["estado"] == "concluido"
+    assert not job["aviso"]
+
+
+def test_sem_dimensao_no_hook_nao_avisa(subir, info_dict_real):
+    """Sem dado não há comparação. Avisar sem base seria pior que calar."""
+    p, _ = subir(downloader=DownloaderEco(info_dict_real))
+    job = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")[0])
+    assert not job["aviso"]

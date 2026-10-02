@@ -197,6 +197,57 @@ def validar_perfil(nome: str, bruto: dict, validar_seletor=None) -> Perfil:
     return perfil
 
 
+AVISO_ABAIXO_DO_PERFIL = (
+    "O perfil {perfil!r} aceita até {limite}p, mas o arquivo veio em {resolucao}. "
+    "Ou o site não tinha essa qualidade, ou ela só existia num codec que este "
+    "perfil não aceita."
+)
+
+
+def menor_dimensao(resolucao: str | None) -> int | None:
+    """A menor dimensão de uma resolução "LARGURAxALTURA".
+
+    É a MESMA medida que `campo_limite` usa para aplicar o teto (SPEC 6.3):
+    comparar altura com o teto diria que um Short 1080x1920 veio em 1920 e
+    passou folgado, quando a qualidade dele é 1080.
+
+    Total: devolve None para qualquer coisa que não seja duas medidas
+    positivas. O `finished` do yt-dlp pode não trazer dimensão nenhuma.
+    """
+    if not isinstance(resolucao, str):
+        return None
+    partes = resolucao.lower().split("x")
+    if len(partes) != 2:
+        return None
+    try:
+        largura, altura = (int(p.strip()) for p in partes)
+    except ValueError:
+        return None
+    if largura <= 0 or altura <= 0:
+        return None
+    return min(largura, altura)
+
+
+def aviso_resolucao(perfil: Perfil, resolucao: str | None) -> str | None:
+    """Avisa quando o arquivo veio ABAIXO do teto do perfil. SPEC 7.
+
+    O teto é um máximo, não uma promessa: receber menos não é erro, é o site
+    não ter. Mas o editor precisa saber, porque o sintoma — "pedi 4K e veio
+    1080p" — é indistinguível de um acerto quando ninguém compara.
+
+    Devolve None quando não há o que comparar: perfil sem teto, ou resolução
+    desconhecida. Avisar sem base seria pior que não avisar.
+    """
+    if perfil.limite_dimensao is None:
+        return None
+    menor = menor_dimensao(resolucao)
+    if menor is None or menor >= perfil.limite_dimensao:
+        return None
+    return AVISO_ABAIXO_DO_PERFIL.format(
+        perfil=perfil.nome, limite=perfil.limite_dimensao, resolucao=resolucao
+    )
+
+
 def disponivel(perfil: Perfil, tem_ffmpeg: bool) -> bool:
     """Se o perfil pode ser usado agora.
 

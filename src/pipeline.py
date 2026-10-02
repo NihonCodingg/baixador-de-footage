@@ -22,7 +22,7 @@ import yaml
 from .domain.erros import LinkInvalido, ProjetoInvalido
 from .domain.models import EstadoJob, Job, Video, tem_audio, tem_video
 from .domain.nomes import montar_caminho, resolver_colisao
-from .domain.perfis import carregar_perfis, disponivel, opcoes_ytdlp
+from .domain.perfis import aviso_resolucao, carregar_perfis, disponivel, opcoes_ytdlp
 from .domain.projetos import NOME_AVULSO, Projeto, carregar_projetos, validar_nome
 from .domain.validacao import normalizar_link, normalizar_lote
 from .download.adapter import NAVEGADORES, Downloader, testar_cookies, validar_seletor
@@ -183,7 +183,13 @@ class Pipeline:
         # de UMA execução: o domínio não precisa saber que ela existe.
         self._destinos: dict[str, Projeto] = {}
 
-        self._worker = Worker(self._fila, self._downloader, self._historico, self._preparar)
+        self._worker = Worker(
+            self._fila,
+            self._downloader,
+            self._historico,
+            self._preparar,
+            self._avaliar_resolucao,
+        )
         self._worker.iniciar()
         self._encerrado = False
 
@@ -565,6 +571,14 @@ class Pipeline:
 
         opcoes = opcoes_ytdlp(perfil, job.video.formatos, destino)
         return Preparacao(url=job.video.url_canonica, opcoes=opcoes, destino=destino)
+
+    def _avaliar_resolucao(self, job: Job, resolucao: str | None) -> str | None:
+        """O worker sabe qual resolução chegou; quem conhece o perfil do job
+        é o pipeline. A regra em si é pura e vive no domínio."""
+        perfil = self._perfis.get(job.perfil)
+        if perfil is None:
+            return None
+        return aviso_resolucao(perfil, resolucao)
 
     def _job_dict(self, job: Job) -> dict:
         progresso = None

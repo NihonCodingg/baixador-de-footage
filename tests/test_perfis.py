@@ -413,8 +413,9 @@ def test_b11_carrega_os_quatro_perfis_reais():
     raiz = Path(__file__).resolve().parent.parent
     dados = yaml.safe_load((raiz / "config" / "perfis.yaml").read_text(encoding="utf-8"))
     perfis = carregar_perfis(dados)
-    assert set(perfis) == {"edicao_1080", "edicao_4k", "so_audio", "preview_leve"}
+    assert set(perfis) == {"edicao_1080", "edicao_4k", "maxima", "so_audio", "preview_leve"}
     assert perfis["so_audio"].limite_dimensao is None
+    assert perfis["maxima"].limite_dimensao is None, "o perfil sem teto"
     assert perfis["edicao_1080"].limite_dimensao == 1080
 
 
@@ -452,3 +453,84 @@ def test_opcoes_ytdlp_monta_o_dict_com_seletor_resolvido():
     assert opcoes["outtmpl"] == "D:/F/video.mp4"
     assert opcoes["noplaylist"] is True, "segunda defesa contra playlist"
     assert "," not in opcoes["format"]
+
+
+# ===========================================================================
+# aviso_resolucao — o teto é máximo, não promessa, mas receber menos precisa
+# aparecer. O worker já gravava a resolução real; ninguém comparava.
+# ===========================================================================
+
+from src.domain.perfis import aviso_resolucao, menor_dimensao  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "resolucao,esperado",
+    [
+        ("1920x1080", 1080),
+        ("1080x1920", 1080),      # vertical: a menor é a largura
+        ("3840x2160", 2160),
+        ("1000x1000", 1000),      # quadrado
+        (" 1920 x 1080 ", 1080),  # com espaço, como alguns sites mandam
+        ("1920X1080", 1080),      # maiúsculo
+    ],
+)
+def test_menor_dimensao(resolucao, esperado):
+    assert menor_dimensao(resolucao) == esperado
+
+
+@pytest.mark.parametrize(
+    "lixo", [None, "", "audio only", "abc", "1920x", "x1080", "1920x1080x720",
+             "0x0", "-1x100", "1920.5x1080", 1080, ("1920", "1080")],
+)
+def test_menor_dimensao_e_total(lixo):
+    """O `finished` do yt-dlp pode não trazer dimensão nenhuma. Nada aqui
+    pode levantar: isto roda no caminho de CONCLUSÃO de um download que já
+    deu certo."""
+    assert menor_dimensao(lixo) is None
+
+
+def test_avisa_quando_veio_abaixo_do_teto():
+    aviso = aviso_resolucao(perfil("bv*{dim}+ba/b", 2160), "1920x1080")
+    assert aviso is not None
+    assert "2160" in aviso and "1920x1080" in aviso
+
+
+def test_o_aviso_cita_as_duas_causas_reais():
+    """"Pedi 4K e veio 1080p" tem duas explicações, e o editor precisa das
+    duas: o site não tinha, ou tinha num codec que o perfil recusa — que é
+    exatamente o caso do edicao_1080, que filtra por H.264."""
+    aviso = aviso_resolucao(perfil("bv*{dim}+ba/b", 1080), "1280x720")
+    assert "não tinha" in aviso
+    assert "codec" in aviso
+
+
+def test_nao_avisa_quando_bateu_o_teto():
+    assert aviso_resolucao(perfil("bv*{dim}+ba/b", 1080), "1920x1080") is None
+
+
+def test_nao_avisa_quando_veio_acima():
+    """Não deveria acontecer — o teto é filtro —, mas se acontecer não é
+    assunto do usuário."""
+    assert aviso_resolucao(perfil("bv*{dim}+ba/b", 1080), "3840x2160") is None
+
+
+def test_vertical_no_teto_nao_avisa():
+    """Um Short 1080x1920 TEM 1080 de qualidade. Comparar com a altura
+    diria 1920 e esconderia o caso inverso — é a mesma armadilha do SPEC 6.3,
+    do outro lado."""
+    assert aviso_resolucao(perfil("bv*{dim}+ba/b", 1080), "1080x1920") is None
+
+
+def test_vertical_abaixo_do_teto_avisa():
+    assert aviso_resolucao(perfil("bv*{dim}+ba/b", 1080), "480x854") is not None
+
+
+def test_perfil_sem_teto_nunca_avisa():
+    """`maxima` e `so_audio` não prometem resolução nenhuma."""
+    assert aviso_resolucao(perfil("bv*+ba/b", None), "256x144") is None
+
+
+@pytest.mark.parametrize("resolucao", [None, "", "audio only"])
+def test_resolucao_desconhecida_nao_avisa(resolucao):
+    """Avisar sem base é pior que não avisar."""
+    assert aviso_resolucao(perfil("bv*{dim}+ba/b", 2160), resolucao) is None

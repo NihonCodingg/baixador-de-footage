@@ -53,11 +53,22 @@ class Worker:
     dublês e não tocam a rede.
     """
 
-    def __init__(self, fila, downloader, historico, preparar: Callable[[Job], Preparacao]):
+    def __init__(
+        self,
+        fila,
+        downloader,
+        historico,
+        preparar: Callable[[Job], Preparacao],
+        avaliar_resolucao: Callable[[Job, str | None], str | None] | None = None,
+    ):
         self._fila = fila
         self._downloader = downloader
         self._historico = historico
         self._preparar = preparar
+        # Injetado, como o `preparar`: decidir se a resolução entregue frustra
+        # o perfil é regra de negócio, e nenhuma mora aqui. O worker só sabe
+        # qual resolução chegou.
+        self._avaliar_resolucao = avaliar_resolucao
         self._thread: threading.Thread | None = None
         self._parar = threading.Event()
 
@@ -227,6 +238,16 @@ class Worker:
             return
         if ja_existia:
             self._fila.avisar(job.id, AVISO_JA_EXISTIA)
+
+        # A resolução do 'finished' é a REAL. Ela já era gravada; o que
+        # faltava era alguém compará-la com o que o perfil pedia. "Pedi 4K e
+        # veio 1080p" é indistinguível de um acerto enquanto ninguém compara.
+        abaixo = None
+        if not ja_existia and self._avaliar_resolucao is not None:
+            abaixo = self._avaliar_resolucao(job, resolucao)
+            if abaixo:
+                self._fila.avisar(job.id, abaixo)
+
         if registro_id is None:
             return
         try:
@@ -237,5 +258,7 @@ class Worker:
                 resolucao=resolucao,
                 ja_existia=ja_existia,
             )
+            if abaixo:
+                self._historico.avisar(registro_id, abaixo)
         except Exception as erro:  # noqa: BLE001
             self._fila.avisar(job.id, AVISO_HISTORICO.format(erro=_texto(erro)))
