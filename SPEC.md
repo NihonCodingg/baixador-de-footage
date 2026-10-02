@@ -293,13 +293,14 @@ Registro explícito, para evitar arquitetura por inércia:
 
 ## 6. Perfis de qualidade
 
-Definidos em `config/perfis.yaml`. Os quatro iniciais, com justificativa em
-RESEARCH §2.2:
+Definidos em `config/perfis.yaml`. Os quatro iniciais têm justificativa em
+RESEARCH §2.2; o `maxima` entrou depois:
 
 | Perfil | Alvo | Container |
 |---|---|---|
 | `edicao_1080` | 1080p, preferindo H.264 + AAC | mp4 |
 | `edicao_4k` | até 2160p, qualquer codec | mkv |
+| `maxima` | o melhor que o site tiver, **sem teto** (`bv*+ba/b`) | mkv |
 | `so_audio` | só a trilha de áudio, em m4a | m4a |
 | `preview_leve` | até 480p, menor arquivo | mp4 |
 
@@ -795,7 +796,7 @@ corrompido não é.
 
 ### 10.6 Avisos: o que não é falha mas precisa ser visto
 
-Três situações terminam bem, ou quase, e mesmo assim o usuário precisa saber.
+Quatro situações terminam bem, ou quase, e mesmo assim o usuário precisa saber.
 Todas viajam no campo `aviso` do job e do registro de histórico — nunca em log,
 que a interface não mostra.
 
@@ -804,6 +805,7 @@ que a interface não mostra.
 | **Arquivo já existia** (§9.3) | Job `concluido`, `ja_existia: true` | "O arquivo já existia no destino; o download foi pulado" |
 | **Histórico indisponível** | Job com o estado certo na fila; a linha do histórico não foi atualizada | "O download terminou, mas o histórico não pôde ser atualizado" |
 | **Interrompido com arquivo no destino** | Na subida seguinte, o registro `interrompido` tem um arquivo no caminho pretendido | "Há um arquivo de N bytes; não é possível verificar se está completo" |
+| **Resolução abaixo do perfil** | Job `concluido` cuja menor dimensão ficou abaixo do `limite_dimensao` | "O perfil aceita até 2160p, mas o arquivo veio em 1920x1080" |
 
 O terceiro caso merece explicação. Um download que termina **depois** de
 `parar()` deixa o job `interrompido` e o arquivo no disco. Na subida seguinte,
@@ -819,6 +821,15 @@ garantir a integridade, e deixa a decisão com quem sabe o que fazer com
 footage. Para isso funcionar, o caminho pretendido é gravado no histórico
 **antes** do download (`registrar_destino`); sem ele, um `interrompido` não
 teria onde ser procurado.
+
+O quarto caso fecha um laço antigo. A resolução REAL vinha do evento
+`finished` do yt-dlp e era gravada no histórico desde o T5, mas ninguém a
+comparava com o perfil — e "pedi 4K, veio 1080p" é indistinguível de um
+acerto enquanto ninguém compara. A comparação usa a **menor dimensão**, a
+mesma medida do teto (§6.3): um Short 1080x1920 tem qualidade 1080, não 1920.
+O teto é máximo, não promessa, então não é falha — o site pode não ter, ou
+ter só num codec que o perfil recusa. Perfil sem teto (`maxima`,
+`so_audio`) e resolução desconhecida nunca avisam.
 
 ---
 
