@@ -12,6 +12,8 @@ stack trace (restrição técnica 2).
 Ticket: T6.
 """
 
+import os
+import subprocess
 import sys
 import threading
 import webbrowser
@@ -179,7 +181,31 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
     return app
 
 
-def main(abrir_navegador=webbrowser.open) -> None:
+EDGE_CANDIDATOS = (
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+)
+
+
+def abrir_como_app(url: str, existe=os.path.exists, executar=subprocess.Popen,
+                   abrir_aba=webbrowser.open) -> None:
+    """Abre a interface numa janela própria, como um programa instalado.
+
+    O `--app` do Edge tira a barra de endereço e as abas, e a janela ganha o
+    ícone da página na barra de tarefas. Edge porque vem com todo Windows 10 e
+    11; sem ele, cai na aba comum do navegador padrão — feio, mas funciona.
+    """
+    edge = next((c for c in EDGE_CANDIDATOS if existe(c)), None)
+    if edge is None:
+        abrir_aba(url)
+        return
+    try:
+        executar([edge, f"--app={url}", "--window-size=1440,900"])
+    except OSError:
+        abrir_aba(url)
+
+
+def main(abrir_navegador=abrir_como_app) -> None:
     """Sobe o Pipeline real, o uvicorn em 127.0.0.1 e a página no navegador.
 
     O navegador abre por um Timer porque `uvicorn.run` bloqueia: abrir antes

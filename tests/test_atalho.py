@@ -59,3 +59,85 @@ def test_nao_usa_pythonw(texto):
     """pythonw esconde o console — e junto com ele a mensagem de erro, que é
     justamente o que este atalho precisa preservar."""
     assert "pythonw" not in texto.lower()
+
+
+def test_ja_rodando_abre_em_modo_app(texto):
+    """O segundo duplo clique também abre a JANELA, não uma aba."""
+    assert "--app=%ENDERECO%" in texto
+
+
+def test_caminho_do_edge_fora_de_bloco_entre_parenteses(texto):
+    """`%ProgramFiles(x86)%` dentro de um bloco ( ) fecha o parêntese no
+    "(x86)" e o .bat quebra em silêncio. O caminho só pode aparecer em linha
+    de nível zero."""
+    profundidade = 0
+    for linha in texto.splitlines():
+        if "ProgramFiles(x86)" in linha:
+            assert profundidade == 0, f"dentro de bloco: {linha.strip()}"
+        if not linha.lstrip().lower().startswith("rem"):
+            profundidade += linha.count("(") - linha.count(")") if "ProgramFiles" not in linha else 0
+
+
+# ===========================================================================
+# Modo app (src/web/app.py) e o ícone (scripts/criar_atalho.py)
+# ===========================================================================
+
+import importlib.util  # noqa: E402
+import struct  # noqa: E402
+
+from src.web.app import abrir_como_app  # noqa: E402
+
+
+def test_abre_no_edge_em_modo_app():
+    chamadas = []
+    abrir_como_app("http://127.0.0.1:8000", existe=lambda c: True,
+                   executar=chamadas.append, abrir_aba=lambda u: chamadas.append(("aba", u)))
+    assert chamadas and "--app=http://127.0.0.1:8000" in chamadas[0]
+
+
+def test_sem_edge_cai_na_aba_comum():
+    abertas = []
+    abrir_como_app("http://x", existe=lambda c: False, executar=None, abrir_aba=abertas.append)
+    assert abertas == ["http://x"]
+
+
+def test_edge_que_nao_inicia_cai_na_aba_comum():
+    def falha(cmd):
+        raise OSError("bloqueado")
+    abertas = []
+    abrir_como_app("http://x", existe=lambda c: True, executar=falha, abrir_aba=abertas.append)
+    assert abertas == ["http://x"]
+
+
+def _script_atalho():
+    spec = importlib.util.spec_from_file_location("criar_atalho", RAIZ / "scripts" / "criar_atalho.py")
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+def test_ico_tem_os_quatro_tamanhos_em_png():
+    """O Windows escolhe o tamanho conforme a tela: 16 na barra, 32/48 na área
+    de trabalho, 256 no zoom do Explorer."""
+    dados = _script_atalho().ico()
+    reservado, tipo, quantidade = struct.unpack("<HHH", dados[:6])
+    assert (reservado, tipo, quantidade) == (0, 1, 4)
+    for i in range(quantidade):
+        largura, _, _, _, _, bpp, tamanho, inicio = struct.unpack(
+            "<BBBBHHII", dados[6 + 16 * i:22 + 16 * i])
+        assert bpp == 32
+        assert dados[inicio:inicio + 8] == b"\x89PNG\r\n\x1a\n"
+        assert inicio + tamanho <= len(dados)
+
+
+def test_icone_usa_as_cores_da_tela():
+    m = _script_atalho()
+    assert m.cor_em(32, 20) == m.ACENTO, "a haste da seta"
+    assert m.cor_em(5, 32) == m.FUNDO
+    assert m.cor_em(0.5, 0.5) == m.TRANSPARENTE, "o canto é arredondado"
+
+
+def test_favicon_existe_e_e_servido_pela_pagina():
+    html = (RAIZ / "web" / "index.html").read_text(encoding="utf-8")
+    assert 'href="favicon.svg"' in html
+    assert (RAIZ / "web" / "favicon.svg").exists()

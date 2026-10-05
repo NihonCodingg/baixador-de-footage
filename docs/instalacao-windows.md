@@ -51,27 +51,29 @@ winget install Gyan.FFmpeg
 
 ### Atalho na área de trabalho
 
-1. Clique com o botão direito em `Baixador.bat` → **Mostrar mais opções** (no
-   Windows 11) → **Enviar para** → **Área de trabalho (criar atalho)**.
-2. O atalho pode ser renomeado à vontade; ele guarda o caminho do `.bat`.
+Um comando cria o atalho **Baixador** na área de trabalho, já com o ícone
+próprio e abrindo minimizado:
 
-Arrastar com o **botão direito** para a área de trabalho e escolher *Criar
-atalhos aqui* dá no mesmo. Não arraste com o botão esquerdo: isso **move** o
-arquivo para fora do repositório.
+```bash
+python scripts/criar_atalho.py
+```
 
-### Trocar o ícone
+O ícone é a seta de download no verde da tela, desenhado pelo próprio script
+(sem dependência nova) e gravado em `data/baixador.ico`, que o Git ignora.
+Rodar de novo regenera tudo. Um atalho antigo feito à mão, como o "Baixador -
+Atalho", não é apagado — pode removê-lo você mesmo.
 
-Botão direito no atalho → **Propriedades** → aba **Atalho** → **Alterar
-ícone** → **Procurar**.
+Se o atalho mudar de lugar ou o projeto mudar de pasta, rode o script de novo.
 
-- O Windows aceita `.ico` (ou `.exe`/`.dll` que contenham ícones). **PNG e JPG
-  não servem** — converta antes.
-- Sem nenhum arquivo à mão, `%SystemRoot%\System32\imageres.dll` e
-  `shell32.dll` trazem centenas de ícones prontos.
-- Guarde o `.ico` fora do repositório, ou o atalho quebra se a pasta mudar.
+### Abre como programa, não como aba
 
-Na mesma aba, **Executar: Minimizada** deixa até o piscar inicial da janela
-fora da tela.
+O Baixador abre numa **janela própria**, sem barra de endereço e sem abas,
+com o ícone dele na barra de tarefas: é o modo app do Edge (`--app`), que vem
+com todo Windows 10 e 11. Funciona tanto ao subir quanto no segundo clique,
+quando ele já estava rodando. Sem o Edge, abre numa aba do navegador padrão.
+
+Fechar a janela **não** desliga o servidor; ele continua na barra de tarefas,
+minimizado. Para desligar, feche aquela janela do console.
 
 > O `.bat` chama a si mesmo com `--rodando` para reabrir minimizado. É um
 > detalhe interno; não use esse argumento à mão.

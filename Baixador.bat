@@ -21,11 +21,22 @@ rem Ja esta no ar? A pergunta e feita a API, nao a porta: assim um outro
 rem programa ocupando a 8000 nao passa por Baixador. Se o curl nao existir
 rem (Windows antigo), o errorlevel nao sera 0 e seguimos para subir.
 curl -s -f -m 2 -o NUL "%ENDERECO%/api/config"
-if not errorlevel 1 (
-    echo O Baixador ja esta rodando. Abrindo o navegador.
-    start "" "%ENDERECO%"
-    exit /b 0
-)
+if errorlevel 1 goto :subir
+
+rem Ja esta rodando: so abre a janela, no modo app do Edge (sem barra de
+rem endereco, como um programa), igual ao que o src/web/app.py faz. Labels e
+rem goto, e nao um bloco ( ): o "(x86)" do caminho fecharia o parentese.
+echo O Baixador ja esta rodando. Abrindo a janela.
+set "EDGE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
+if not exist "%EDGE%" set "EDGE=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
+if not exist "%EDGE%" goto :aba_comum
+start "" "%EDGE%" --app=%ENDERECO% --window-size=1440,900
+exit /b 0
+:aba_comum
+start "" "%ENDERECO%"
+exit /b 0
+
+:subir
 
 rem A janela se reabre minimizada uma unica vez, para nao ficar na frente
 rem do navegador. Ela continua na barra de tarefas: e por ela que se para

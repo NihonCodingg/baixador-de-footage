@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Ícone do Baixador: a seta de download do selo "baixando", no verde de
+       acento da tela (--cor-acento) sobre o fundo dela (--cor-fundo).
+       Mesmo desenho do .ico gerado por scripts/criar_atalho.py. -->
+  <rect width="64" height="64" rx="14" fill="#0a0b0d"/>
+  <rect x="27" y="11" width="10" height="23" rx="2" fill="#b8f24a"/>
+  <path d="M15 31h34L32 47z" fill="#b8f24a"/>
+  <rect x="14" y="51" width="36" height="5" rx="2.5" fill="#b8f24a"/>
+</svg>
