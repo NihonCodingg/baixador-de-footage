@@ -70,9 +70,9 @@ var ROTULO_ESTADO = {
 /* motivos que valem uma nova tentativa (contrato §5) */
 var MOTIVOS_RETENTAVEIS = { rede: true, rate_limit: true };
 
-function selo(est) {
+function selo(est, rotulo) {
   return '<span class="selo" data-estado="' + esc(est) + '">' +
-    (ICONES[est] || '') + esc(ROTULO_ESTADO[est] || est) + '</span>';
+    (ICONES[est] || '') + esc(rotulo || ROTULO_ESTADO[est] || est) + '</span>';
 }
 
 /* ------------------------------------------------------------
@@ -734,11 +734,14 @@ function estruturaJob(j, posicao) {
     '<span class="thumb__dur mono">' + fmtDuracao(v.duracao_s) + '</span></div>';
 
   html += '<div class="job__info">';
-  html += '<div class="row row--gap">' + selo(j.estado) +
+  // Na conversão o estado ainda é `baixando` (o arquivo final não existe),
+  // mas dizer "Baixando" fez o editor achar que o DOWNLOAD estava lento.
+  html += '<div class="row row--gap">' +
+    selo(j.estado, j.fase === 'convertendo' ? 'Convertendo' : null) +
     (j.ja_existia ? '<span class="tag">já existia</span>' : '') +
     // Depois do download, a conversão para ProRes pode levar mais que ele:
     // sem isto o card ficaria parado em 100% sem explicação.
-    (j.fase === 'convertendo' ? '<span class="tag">convertendo para ProRes</span>' : '') +
+    (j.fase === 'convertendo' ? '<span class="tag">download pronto · gerando ProRes</span>' : '') +
     '<span class="tag">' + esc(j.perfil) + '</span>' +
     '<span class="tag">' + esc(rotuloProjeto(j.projeto)) + '</span></div>';
   html += '<h3 class="titulo" title="' + esc(v.titulo) + '">' + esc(v.titulo) + '</h3>';

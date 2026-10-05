@@ -11,6 +11,7 @@ Ticket: perfil ProRes.
 """
 
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -28,6 +29,10 @@ def montar_comando(ffmpeg: str, origem: str, destino: str, conversao: Conversao)
         ffmpeg,
         "-hide_banner",
         "-nostdin",
+        # Só erros no stderr: o pipe dele só é lido no FIM, e um log verboso
+        # que enchesse o buffer travaria o ffmpeg esperando alguém ler.
+        "-loglevel",
+        "error",
         # -n e não -y: footage nunca é sobrescrito (SPEC 8.4). Se o destino
         # aparecer entre a resolução de colisão e agora, o ffmpeg recusa.
         "-n",
@@ -111,6 +116,12 @@ def converter(
             text=True,
             encoding="utf-8",
             errors="replace",
+            # Prioridade abaixo do normal: a conversão de 4K ocupa a CPU
+            # inteira por dezenas de minutos, e o editor está com o Premiere
+            # aberto ao lado. Medido: em prioridade normal o ffmpeg tomou 87%
+            # da CPU e o PC travou. Assim ela cede a vez quando ele usa a
+            # máquina, e corre a toda quando não usa.
+            **_prioridade_baixa(),
         )
     except OSError as erro:
         raise ErroDeConversao(f"não foi possível iniciar o ffmpeg: {erro}") from erro
@@ -134,6 +145,14 @@ def converter(
     if not Path(destino).is_file():
         raise ErroDeConversao("o ffmpeg terminou sem erro, mas o arquivo convertido não existe")
     return destino
+
+
+def _prioridade_baixa() -> dict:
+    """Argumento do Popen para rodar abaixo do normal. Só no Windows: no
+    resto, `nice` exigiria outro mecanismo, e o alvo do projeto é Windows."""
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}
+    return {}
 
 
 def _apagar_parcial(destino: str) -> None:

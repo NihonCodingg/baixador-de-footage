@@ -603,3 +603,25 @@ def test_falha_ao_gravar_desfecho_nao_derruba_o_worker(montar):
     fila.adicionar(job(video_id="bbbbbbbbbbb", id_="b"))
     assert hist.terminou.wait(ESPERA), "o worker morreu"
     assert fila.obter("b").estado is EstadoJob.CONCLUIDO
+
+
+# ===========================================================================
+# Tempo restante da conversão
+# ===========================================================================
+
+from src.queue.worker import estimar_restante  # noqa: E402
+
+
+def test_estima_pelo_ritmo_medio():
+    # 100 s de vídeo em 500 s de relógio (0,2x): faltam 485 s de vídeo = 2425 s
+    assert estimar_restante(100, 585, 500) == 2425
+
+
+@pytest.mark.parametrize("feitos,total,decorrido", [
+    (0, 585, 60),      # nada convertido ainda
+    (10, 585, 2),      # relógio curto demais: ritmo é ruído de arranque
+    (100, None, 500),  # duração desconhecida
+    (585, 585, 900),   # já acabou
+])
+def test_sem_base_nao_estima(feitos, total, decorrido):
+    assert estimar_restante(feitos, total, decorrido) is None

@@ -10,6 +10,7 @@ Ticket: T5.
 
 import os
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -43,6 +44,19 @@ class Preparacao:
     # e onde fica o arquivo final. O histórico aponta para ESTE caminho.
     conversao: Conversao | None = None
     destino_convertido: str | None = None
+
+
+def estimar_restante(feitos: float, total: float | None, decorrido: float) -> int | None:
+    """Segundos até o fim da conversão, pelo ritmo médio até agora.
+
+    A conversão de 4K leva dezenas de minutos; sem estimativa, "--" no
+    "restante" parece travamento. Só estima depois de ter base: com menos de
+    1 s de vídeo ou 5 s de relógio, o ritmo ainda é ruído de arranque.
+    """
+    if not total or feitos < 1 or decorrido < 5 or feitos >= total:
+        return None
+    ritmo = feitos / decorrido               # segundos de vídeo por segundo de relógio
+    return int((total - feitos) / ritmo)
 
 
 def _tamanho_arquivo(caminho: str) -> int | None:
@@ -235,12 +249,15 @@ class Worker:
         self._fila.marcar_fase(job.id, FASE_CONVERTENDO)
         duracao = job.video.duracao_s
 
+        inicio = time.monotonic()
+
         def ao_progredir(segundos: float) -> None:
             # Progresso em SEGUNDOS de mídia, não bytes: o tamanho final do
             # ProRes não é conhecido antes, e a duração é.
             self._fila.atualizar_progresso(job.id, Progresso(
                 baixados=int(segundos), total=duracao or None,
-                velocidade_bps=None, eta_s=None))
+                velocidade_bps=None,
+                eta_s=estimar_restante(segundos, duracao, time.monotonic() - inicio)))
 
         try:
             return self._converter(origem, preparacao.destino_convertido, conversao, ao_progredir)
