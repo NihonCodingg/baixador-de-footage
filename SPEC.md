@@ -300,6 +300,7 @@ RESEARCH §2.2; o `maxima` entrou depois:
 |---|---|---|
 | `edicao_1080` | 1080p, preferindo H.264 + AAC | mp4 |
 | `edicao_4k` | até 2160p, qualquer codec | mkv |
+| `premiere_4k` | até 2160p, depois **convertido para ProRes 422 HQ** (§6.5) | mov |
 | `maxima` | o melhor que o site tiver, **sem teto** (`bv*+ba/b`) | mkv |
 | `so_audio` | só a trilha de áudio, em m4a | m4a |
 | `preview_leve` | até 480p, menor arquivo | mp4 |
@@ -998,6 +999,39 @@ próximo download não chega a ser gravada.
 
 O terceiro é o pior: falha mesmo com o navegador fechado. Nesta máquina, em
 03/09/2026, o Edge cai exatamente nele. O Firefox não tem nenhum dos três.
+
+---
+
+## 12d. Conversão para ProRes 422 HQ (perfil `premiere_4k`)
+
+O YouTube só serve 4K em VP9 ou AV1, e o Premiere não edita esses codecs bem.
+O perfil `premiere_4k` baixa como o `edicao_4k` e, depois, converte com o
+ffmpeg para ProRes 422 HQ em `.mov`: `prores_ks` profile 3, 10 bits 4:2:2,
+áudio PCM 24 bits.
+
+Reverte uma decisão antiga (RESEARCH §2.2 dizia que o mezzanine era trabalho de
+ffmpeg fora do projeto). Reverte por pedido do autor: o objetivo é o arquivo
+cair no disco já pronto para a timeline.
+
+- **Não é postprocessor do yt-dlp.** O `FFmpegVideoConvertor` só recebe o
+  container; ProRes HQ exige `-profile:v 3`. A conversão é etapa própria do
+  worker, depois do download e antes do `concluido`.
+- **Não é estado novo.** O job fica em `baixando` com `fase: "convertendo"` e
+  progresso em SEGUNDOS de vídeo (o tamanho final não é conhecido antes, a
+  duração é). A máquina de estados do §10.2 não muda.
+- **O `.mkv` baixado fica.** Apagar footage sozinho é o que o projeto evita. O
+  histórico aponta para o `.mov`.
+- **Falha na conversão não falha o job.** O download deu certo e o footage
+  existe: o job conclui apontando para o `.mkv`, com aviso.
+- **Nunca sobrescreve.** A colisão do `.mov` é resolvida como a do download. E
+  há uma recusa prévia na própria conversão, por um motivo medido: com `-n` e
+  destino existente, o ffmpeg desta máquina sai com código 0 **sem gravar**, e
+  o `.mov` antigo pareceria a conversão nova.
+
+Custos medidos (clipe 4K 60fps sintético, nesta máquina): conversão cerca de
+**4x mais lenta que o tempo real**, e o ProRes HQ em 4K60 fica na ordem de
+**5 a 10 GB por minuto** — o maior valor vale para gameplay, que tem mais
+detalhe.
 
 ---
 

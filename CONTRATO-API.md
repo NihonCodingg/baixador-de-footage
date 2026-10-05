@@ -188,6 +188,7 @@ Campos de cada job:
 | `video` | objeto | `id`, `titulo`, `canal`, `duracao_s`, `thumbnail` |
 | `progresso` | objeto ou `null` | `null` antes de começar. Ver §5 |
 | `caminho_final` | string ou `null` | Preenchido só em `concluido` |
+| `fase` | string ou `null` | `"convertendo"` quando o download terminou e o perfil (ex.: `premiere_4k`) ainda converte para ProRes. O estado continua `baixando`, e `progresso` passa a contar **segundos de vídeo**, não bytes |
 | **`ja_existia`** | booleano | `true` = o arquivo já estava no destino e **nada foi baixado**. Ver §7 |
 | **`aviso`** | string ou `null` | Aviso não-bloqueante. **Mostrar sempre que existir.** Ver §7 |
 | `motivo_falha`, `mensagem_falha` | string ou `null` | Preenchidos só em `falhou`. Ver §6 |
@@ -544,6 +545,14 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
       "container": "mkv"
     },
     {
+      "nome": "premiere_4k",
+      "descricao": "4K para o Premiere — ProRes 422 HQ em .mov (~10 GB/min a 60fps)",
+      "disponivel": true,
+      "exige_ffmpeg": true,
+      "limite_dimensao": 2160,
+      "container": "mkv"
+    },
+    {
       "nome": "maxima",
       "descricao": "O melhor que o site tiver, sem teto — VP9/AV1, pode exigir transcode",
       "disponivel": true,
@@ -721,7 +730,7 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
 ```json
 {
   "ids": [
-    "ff18d896ab9a46c6a007f8a5f25d09f4"
+    "50cbb351d140478190801c4957584c2b"
   ]
 }
 ```
@@ -734,13 +743,14 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
 {
   "jobs": [
     {
-      "id": "ff18d896ab9a46c6a007f8a5f25d09f4",
+      "id": "50cbb351d140478190801c4957584c2b",
       "estado": "baixando",
       "ja_existia": false,
+      "fase": null,
       "url": "https://youtube.com/shorts/LzS8kB6lIm0?si=0RP8BxS-q-XGH4Dw",
       "perfil": "edicao_1080",
       "projeto": "pessoal",
-      "criado_em": "2026-10-02T19:05:37+00:00",
+      "criado_em": "2026-10-05T15:35:54+00:00",
       "video": {
         "id": "LzS8kB6lIm0",
         "titulo": "Camisa azul da Seleção: críticas ao design e lembrança histórica",
@@ -854,13 +864,14 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
 {
   "jobs": [
     {
-      "id": "ff18d896ab9a46c6a007f8a5f25d09f4",
+      "id": "50cbb351d140478190801c4957584c2b",
       "estado": "concluido",
       "ja_existia": false,
+      "fase": null,
       "url": "https://youtube.com/shorts/LzS8kB6lIm0?si=0RP8BxS-q-XGH4Dw",
       "perfil": "edicao_1080",
       "projeto": "pessoal",
-      "criado_em": "2026-10-02T19:05:37+00:00",
+      "criado_em": "2026-10-05T15:35:54+00:00",
       "video": {
         "id": "LzS8kB6lIm0",
         "titulo": "Camisa azul da Seleção: críticas ao design e lembrança histórica",
@@ -881,13 +892,14 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
       "aviso": null
     },
     {
-      "id": "9453cd22a3b741eb98b05b4d8d9ff381",
+      "id": "e971719b99f44f5e8012b4a2089b79e1",
       "estado": "cancelado",
       "ja_existia": false,
+      "fase": null,
       "url": "https://youtube.com/shorts/LzS8kB6lIm0?si=0RP8BxS-q-XGH4Dw",
       "perfil": "so_audio",
       "projeto": "pessoal",
-      "criado_em": "2026-10-02T19:05:37+00:00",
+      "criado_em": "2026-10-05T15:35:54+00:00",
       "video": {
         "id": "LzS8kB6lIm0",
         "titulo": "Camisa azul da Seleção: críticas ao design e lembrança histórica",
@@ -931,8 +943,8 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
       "aviso": null,
       "motivo_falha": null,
       "mensagem_falha": null,
-      "criado_em": "2026-10-02T19:05:37+00:00",
-      "concluido_em": "2026-10-02T19:05:37+00:00"
+      "criado_em": "2026-10-05T15:35:54+00:00",
+      "concluido_em": "2026-10-05T15:35:54+00:00"
     }
   ]
 }
@@ -964,8 +976,8 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
       "aviso": null,
       "motivo_falha": null,
       "mensagem_falha": null,
-      "criado_em": "2026-10-02T19:05:37+00:00",
-      "concluido_em": "2026-10-02T19:05:37+00:00"
+      "criado_em": "2026-10-05T15:35:54+00:00",
+      "concluido_em": "2026-10-05T15:35:54+00:00"
     }
   ]
 }
@@ -1053,7 +1065,7 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
           "caminho": "D:\\FOOTAGE\\pessoal\\20260901 - Camisa azul da Seleção críticas ao design e lembrança histórica [LzS8kB6lIm0].mp4",
           "projeto": "pessoal",
           "resolucao": "1080x1920",
-          "concluido_em": "2026-10-02T19:05:37+00:00"
+          "concluido_em": "2026-10-05T15:35:54+00:00"
         }
       }
     }
@@ -1188,13 +1200,14 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
 {
   "jobs": [
     {
-      "id": "ff18d896ab9a46c6a007f8a5f25d09f4",
+      "id": "50cbb351d140478190801c4957584c2b",
       "estado": "concluido",
       "ja_existia": false,
+      "fase": null,
       "url": "https://youtube.com/shorts/LzS8kB6lIm0?si=0RP8BxS-q-XGH4Dw",
       "perfil": "edicao_1080",
       "projeto": "pessoal",
-      "criado_em": "2026-10-02T19:05:37+00:00",
+      "criado_em": "2026-10-05T15:35:54+00:00",
       "video": {
         "id": "LzS8kB6lIm0",
         "titulo": "Camisa azul da Seleção: críticas ao design e lembrança histórica",
@@ -1215,13 +1228,14 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
       "aviso": null
     },
     {
-      "id": "9453cd22a3b741eb98b05b4d8d9ff381",
+      "id": "e971719b99f44f5e8012b4a2089b79e1",
       "estado": "cancelado",
       "ja_existia": false,
+      "fase": null,
       "url": "https://youtube.com/shorts/LzS8kB6lIm0?si=0RP8BxS-q-XGH4Dw",
       "perfil": "so_audio",
       "projeto": "pessoal",
-      "criado_em": "2026-10-02T19:05:37+00:00",
+      "criado_em": "2026-10-05T15:35:54+00:00",
       "video": {
         "id": "LzS8kB6lIm0",
         "titulo": "Camisa azul da Seleção: críticas ao design e lembrança histórica",
@@ -1236,13 +1250,14 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
       "aviso": null
     },
     {
-      "id": "6b4a158f5e8840c68b5e96a8fcbce695",
+      "id": "f1ade6d2f30146b297885bb45a078081",
       "estado": "concluido",
       "ja_existia": true,
+      "fase": null,
       "url": "https://youtube.com/shorts/LzS8kB6lIm0?si=0RP8BxS-q-XGH4Dw",
       "perfil": "edicao_1080",
       "projeto": "pessoal",
-      "criado_em": "2026-10-02T19:05:37+00:00",
+      "criado_em": "2026-10-05T15:35:54+00:00",
       "video": {
         "id": "LzS8kB6lIm0",
         "titulo": "Camisa azul da Seleção: críticas ao design e lembrança histórica",
@@ -1286,8 +1301,8 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
       "aviso": "O arquivo já existia no destino; o download foi pulado e nada foi sobrescrito.",
       "motivo_falha": null,
       "mensagem_falha": null,
-      "criado_em": "2026-10-02T19:05:37+00:00",
-      "concluido_em": "2026-10-02T19:05:37+00:00"
+      "criado_em": "2026-10-05T15:35:54+00:00",
+      "concluido_em": "2026-10-05T15:35:54+00:00"
     },
     {
       "id": 1,
@@ -1308,8 +1323,8 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
       "aviso": null,
       "motivo_falha": null,
       "mensagem_falha": null,
-      "criado_em": "2026-10-02T19:05:37+00:00",
-      "concluido_em": "2026-10-02T19:05:37+00:00"
+      "criado_em": "2026-10-05T15:35:54+00:00",
+      "concluido_em": "2026-10-05T15:35:54+00:00"
     }
   ]
 }
@@ -1341,8 +1356,8 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
       "aviso": "O download foi interrompido, mas há um arquivo de 3145728 bytes em D:\\FOOTAGE\\pessoal\\parcial-de-um-download-interrompido.mp4. Não é possível verificar se está completo — confira antes de usar, ou baixe de novo com forcar.",
       "motivo_falha": null,
       "mensagem_falha": null,
-      "criado_em": "2026-10-02T19:05:37+00:00",
-      "concluido_em": "2026-10-02T19:05:37+00:00"
+      "criado_em": "2026-10-05T15:35:54+00:00",
+      "concluido_em": "2026-10-05T15:35:55+00:00"
     },
     {
       "id": 2,
@@ -1363,8 +1378,8 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
       "aviso": "O arquivo já existia no destino; o download foi pulado e nada foi sobrescrito.",
       "motivo_falha": null,
       "mensagem_falha": null,
-      "criado_em": "2026-10-02T19:05:37+00:00",
-      "concluido_em": "2026-10-02T19:05:37+00:00"
+      "criado_em": "2026-10-05T15:35:54+00:00",
+      "concluido_em": "2026-10-05T15:35:54+00:00"
     }
   ]
 }
