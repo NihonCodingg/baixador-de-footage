@@ -190,3 +190,60 @@ def test_ffmpeg_real_gera_prores_hq_que_o_premiere_abre(tmp_path):
     assert (video["codec_name"], video["profile"], video["pix_fmt"]) == ("prores", "HQ", "yuv422p10le")
     assert audio["codec_name"] == "pcm_s24le"
     assert origem.exists(), "o .mkv baixado fica"
+
+
+# ===========================================================================
+# Placa de vídeo primeiro, CPU se ela falhar
+# ===========================================================================
+
+
+class PopenSequencia:
+    """Cada chamada usa o próximo roteiro: (código, cria_arquivo)."""
+
+    def __init__(self, *roteiros):
+        self.roteiros = list(roteiros)
+        self.comandos = []
+
+    def __call__(self, comando, **kw):
+        self.comandos.append(comando)
+        codigo, cria = self.roteiros.pop(0)
+        if cria:
+            with open(comando[-1], "wb") as f:
+                f.write(b"mov")
+        falso = PopenFalso(codigo=codigo, cria_arquivo=False, stderr="erro da gpu")
+        falso.stdout, falso.stderr = iter([]), io.StringIO("erro da gpu")
+        return falso
+
+
+def test_comando_da_gpu_usa_vulkan_e_o_mesmo_prores_hq():
+    texto = " ".join(montar_comando("ffmpeg", "in.mkv", "out.mov", PRORES, gpu=True))
+    assert "-c:v prores_ks_vulkan" in texto
+    assert "-profile:v 3" in texto, "o mesmo 422 HQ"
+    assert "-init_hw_device vulkan=vk:0" in texto
+    assert "format=yuv422p10le,hwupload" in texto
+    assert "-pix_fmt" not in texto, "na GPU o formato vai pelo filtro, antes do upload"
+
+
+def test_tenta_a_gpu_primeiro():
+    falso = PopenSequencia((0, True))
+    import tempfile, os
+    with tempfile.TemporaryDirectory() as d:
+        converter("ffmpeg", "in.mkv", os.path.join(d, "o.mov"), PRORES, executar=falso)
+    assert len(falso.comandos) == 1
+    assert "prores_ks_vulkan" in falso.comandos[0]
+
+
+def test_gpu_que_falha_cai_na_cpu_e_o_download_nao_se_perde(tmp_path):
+    """Driver sem Vulkan, ffmpeg antigo sem o codificador: a CPU refaz."""
+    falso = PopenSequencia((1, True), (0, True))
+    final = converter("ffmpeg", "in.mkv", str(tmp_path / "o.mov"), PRORES, executar=falso)
+    assert final == str(tmp_path / "o.mov")
+    assert "prores_ks_vulkan" in falso.comandos[0]
+    assert "prores_ks" in falso.comandos[1] and "prores_ks_vulkan" not in falso.comandos[1]
+
+
+def test_falha_nas_duas_levanta_e_nao_deixa_parcial(tmp_path):
+    falso = PopenSequencia((1, True), (1, True))
+    with pytest.raises(ErroDeConversao):
+        converter("ffmpeg", "in.mkv", str(tmp_path / "o.mov"), PRORES, executar=falso)
+    assert not (tmp_path / "o.mov").exists()

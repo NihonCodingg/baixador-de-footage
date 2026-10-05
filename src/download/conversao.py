@@ -22,9 +22,18 @@ class ErroDeConversao(Exception):
     """O ffmpeg terminou com erro. O arquivo de origem continua intacto."""
 
 
-def montar_comando(ffmpeg: str, origem: str, destino: str, conversao: Conversao) -> list[str]:
+def montar_comando(
+    ffmpeg: str, origem: str, destino: str, conversao: Conversao, gpu: bool = False
+) -> list[str]:
     """A linha de comando, montada como LISTA: sem shell, sem aspas, e um
-    caminho com espaço, acento ou `&` não vira problema."""
+    caminho com espaço, acento ou `&` não vira problema.
+
+    `gpu=True` usa o codificador de placa de vídeo da conversão (Vulkan). A
+    DECODIFICAÇÃO do VP9 continua na CPU de propósito: medido, decodificar
+    na GPU e devolver cada quadro 4K para o filtro de formato custou mais do
+    que economizou (0,25x e 0,19x contra 0,36x).
+    """
+    usar_gpu = gpu and conversao.vcodec_gpu is not None
     comando = [
         ffmpeg,
         "-hide_banner",
@@ -36,6 +45,10 @@ def montar_comando(ffmpeg: str, origem: str, destino: str, conversao: Conversao)
         # -n e não -y: footage nunca é sobrescrito (SPEC 8.4). Se o destino
         # aparecer entre a resolução de colisão e agora, o ffmpeg recusa.
         "-n",
+    ]
+    if usar_gpu:
+        comando += ["-init_hw_device", "vulkan=vk:0", "-filter_hw_device", "vk"]
+    comando += [
         "-i",
         origem,
         "-map",
@@ -44,7 +57,7 @@ def montar_comando(ffmpeg: str, origem: str, destino: str, conversao: Conversao)
         "-map",
         "0:a:0?",
         "-c:v",
-        conversao.vcodec,
+        conversao.vcodec_gpu if usar_gpu else conversao.vcodec,
     ]
     if conversao.perfil_video is not None:
         comando += ["-profile:v", conversao.perfil_video]
@@ -53,8 +66,13 @@ def montar_comando(ffmpeg: str, origem: str, destino: str, conversao: Conversao)
         # isso para escolher o decodificador nativo de ProRes.
         "-vendor",
         "apl0",
-        "-pix_fmt",
-        conversao.pix_fmt,
+    ]
+    if usar_gpu:
+        # O quadro vira 10 bits 4:2:2 na CPU e sobe para a placa já pronto.
+        comando += ["-vf", f"format={conversao.pix_fmt},hwupload", "-async_depth", "4"]
+    else:
+        comando += ["-pix_fmt", conversao.pix_fmt]
+    comando += [
         "-c:a",
         conversao.acodec,
         # Progresso legível por máquina no stdout, em vez da linha de status
@@ -107,7 +125,22 @@ def converter(
     if Path(destino).exists():
         raise ErroDeConversao(f"o destino já existe e não será sobrescrito: {destino}")
 
-    comando = montar_comando(ffmpeg, origem, destino, conversao)
+    # Placa de vídeo primeiro; se ela falhar — driver sem Vulkan, ffmpeg sem o
+    # codificador, qualquer erro —, a CPU refaz do zero. Um download nunca é
+    # perdido porque a GPU não colaborou. O parcial da tentativa na GPU já foi
+    # apagado por _rodar, então o destino está livre de novo.
+    if conversao.vcodec_gpu is not None:
+        try:
+            return _rodar(montar_comando(ffmpeg, origem, destino, conversao, gpu=True),
+                          destino, ao_progredir, executar)
+        except ErroDeConversao:
+            pass
+    return _rodar(montar_comando(ffmpeg, origem, destino, conversao), destino,
+                  ao_progredir, executar)
+
+
+def _rodar(comando, destino, ao_progredir, executar) -> str:
+    """Uma tentativa: roda, reporta progresso, e apaga o parcial se falhar."""
     try:
         processo = executar(
             comando,
@@ -137,8 +170,8 @@ def converter(
     stderr = processo.stderr.read() if processo.stderr else ""
     codigo = processo.wait()
     if codigo != 0:
-        # Seguro apagar: a checagem acima garante que o arquivo não existia
-        # antes, então qualquer coisa ali é o parcial desta conversão.
+        # Seguro apagar: `converter` garante que o arquivo não existia antes
+        # de qualquer tentativa, então o que está ali é o parcial desta.
         _apagar_parcial(destino)
         ultimas = " ".join(l.strip() for l in stderr.strip().splitlines()[-3:])
         raise ErroDeConversao(f"o ffmpeg terminou com código {codigo}: {ultimas[:300]}")
