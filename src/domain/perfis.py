@@ -24,6 +24,40 @@ class Perfil:
     merge_output_format: str
     postprocessors: tuple[dict, ...]
     exige_ffmpeg: bool
+    conversao: str | None = None  # chave de CONVERSOES, aplicada após o download
+
+
+@dataclass(frozen=True)
+class Conversao:
+    """Um transcode para codec de edição, feito pelo ffmpeg DEPOIS do download.
+
+    Existe porque o yt-dlp não expressa isto: o FFmpegVideoConvertor dele só
+    recebe o container, e ProRes HQ exige `-profile:v 3` no `prores_ks`.
+    Dado puro: quem monta a linha de comando é src/download/conversao.py.
+    """
+
+    rotulo: str
+    container: str
+    vcodec: str
+    perfil_video: str | None
+    pix_fmt: str
+    acodec: str
+
+
+# ProRes 422 HQ é o profile 3 do prores_ks; yuv422p10le é o que o 422 HQ
+# carrega (10 bits, 4:2:2). Áudio em PCM 24 bits: é o que a timeline espera
+# de um mezzanine. Nenhum dos dois devolve qualidade que o YouTube já tirou —
+# servem para a timeline não engasgar com VP9/AV1.
+CONVERSOES = {
+    "prores_422_hq": Conversao(
+        rotulo="ProRes 422 HQ",
+        container="mov",
+        vcodec="prores_ks",
+        perfil_video="3",
+        pix_fmt="yuv422p10le",
+        acodec="pcm_s24le",
+    ),
+}
 
 
 CONTAINERS_VALIDOS = frozenset({"mp4", "mkv", "webm", "m4a", "mp3", "opus"})
@@ -175,6 +209,15 @@ def validar_perfil(nome: str, bruto: dict, validar_seletor=None) -> Perfil:
     if not isinstance(exige_ffmpeg, bool):
         raise falha("'exige_ffmpeg' deve ser true ou false.")
 
+    conversao = bruto.get("conversao")
+    if conversao is not None:
+        if conversao not in CONVERSOES:
+            raise falha(
+                f"conversao {conversao!r} desconhecida. Conhecidas: {sorted(CONVERSOES)}."
+            )
+        if not exige_ffmpeg:
+            raise falha("um perfil com conversao exige ffmpeg: quem converte é ele.")
+
     perfil = Perfil(
         nome=nome,
         descricao=str(bruto.get("descricao") or ""),
@@ -184,6 +227,7 @@ def validar_perfil(nome: str, bruto: dict, validar_seletor=None) -> Perfil:
         merge_output_format=container,
         postprocessors=tuple(dict(pp) for pp in pps),
         exige_ffmpeg=exige_ffmpeg,
+        conversao=conversao,
     )
 
     if validar_seletor is not None:
@@ -246,6 +290,16 @@ def aviso_resolucao(perfil: Perfil, resolucao: str | None) -> str | None:
     return AVISO_ABAIXO_DO_PERFIL.format(
         perfil=perfil.nome, limite=perfil.limite_dimensao, resolucao=resolucao
     )
+
+
+def caminho_convertido(destino: str, conversao: Conversao) -> str:
+    """O destino do download com a extensão do container convertido.
+
+    Só troca a extensão: o nome já passou pelo orçamento de 240 caracteres
+    (SPEC 8.3), e `.mkv` e `.mov` têm o mesmo tamanho.
+    """
+    base, ponto, _ = destino.rpartition(".")
+    return f"{base if ponto else destino}.{conversao.container}"
 
 
 def disponivel(perfil: Perfil, tem_ffmpeg: bool) -> bool:

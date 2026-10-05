@@ -22,10 +22,18 @@ import yaml
 from .domain.erros import LinkInvalido, ProjetoInvalido
 from .domain.models import EstadoJob, Job, Video, tem_audio, tem_video
 from .domain.nomes import montar_caminho, resolver_colisao
-from .domain.perfis import aviso_resolucao, carregar_perfis, disponivel, opcoes_ytdlp
+from .domain.perfis import (
+    CONVERSOES,
+    aviso_resolucao,
+    caminho_convertido,
+    carregar_perfis,
+    disponivel,
+    opcoes_ytdlp,
+)
 from .domain.projetos import NOME_AVULSO, Projeto, carregar_projetos, validar_nome
 from .domain.validacao import normalizar_link, normalizar_lote
 from .download.adapter import NAVEGADORES, Downloader, testar_cookies, validar_seletor
+from .download.conversao import converter as converter_com_ffmpeg
 from .download.ffmpeg import detectar
 from .download.traducao_erros import ErroDeDownload
 from .queue.fila import Fila
@@ -133,6 +141,7 @@ class Pipeline:
         abrir_no_explorador: Callable[[str], None] | None = None,
         escolher_pasta: Callable[[], str | None] | None = None,
         testar_cookies_de: Callable[..., str | None] | None = None,
+        converter_midia: Callable[..., str] | None = None,
     ):
         """Carrega perfis e projetos, detecta o ffmpeg, abre o histórico e
         reconcilia os interrompidos (SPEC 10.1), sobe o worker."""
@@ -160,6 +169,8 @@ class Pipeline:
         self._abrir = abrir_no_explorador or abrir_no_sistema
         self._escolher_pasta = escolher_pasta or escolher_pasta_no_sistema
         self._testar_cookies = testar_cookies_de or testar_cookies
+        # Injetado: o teste roda sem ffmpeg e sem gastar minutos em transcode.
+        self._converter_midia = converter_midia or self._converter_com_ffmpeg
 
         self._perfis = carregar_perfis(
             self._ler_yaml("perfis.yaml"), validar_seletor=validar_seletor
@@ -189,6 +200,7 @@ class Pipeline:
             self._historico,
             self._preparar,
             self._avaliar_resolucao,
+            self._converter_midia,
         )
         self._worker.iniciar()
         self._encerrado = False
@@ -536,6 +548,9 @@ class Pipeline:
                 continue
 
             caminho, aviso_nome = self._destino(video, definicao, destino_projeto)
+            # O --dry-run existe para conferir o nome antes de gravar: num
+            # perfil que converte, o nome que importa é o do .mov.
+            caminho = self._destino_convertido(definicao, caminho)[1] or caminho
             ja = self._historico.ja_baixado(video.extractor, video.video_id, perfil)
             itens.append(
                 {
@@ -570,7 +585,30 @@ class Pipeline:
                 self._avisos[job.id] = aviso
 
         opcoes = opcoes_ytdlp(perfil, job.video.formatos, destino)
-        return Preparacao(url=job.video.url_canonica, opcoes=opcoes, destino=destino)
+        conversao, final = self._destino_convertido(perfil, destino)
+        return Preparacao(
+            url=job.video.url_canonica,
+            opcoes=opcoes,
+            destino=destino,
+            conversao=conversao,
+            destino_convertido=final,
+        )
+
+    def _destino_convertido(self, perfil, destino: str):
+        """(conversao, caminho final) — ou (None, None) se o perfil não converte.
+
+        A colisão do .mov é resolvida AQUI, como a do download: um .mov com o
+        mesmo nome já no destino ganha " (2)", nunca é sobrescrito.
+        """
+        if not perfil.conversao:
+            return None, None
+        conversao = CONVERSOES[perfil.conversao]
+        final = resolver_colisao(caminho_convertido(destino, conversao), os.path.exists)
+        return conversao, final
+
+    def _converter_com_ffmpeg(self, origem, destino, conversao, ao_progredir) -> str:
+        return converter_com_ffmpeg(self._ffmpeg.ffmpeg or "ffmpeg", origem, destino,
+                                    conversao, ao_progredir)
 
     def _avaliar_resolucao(self, job: Job, resolucao: str | None) -> str | None:
         """O worker sabe qual resolução chegou; quem conhece o perfil do job
@@ -598,6 +636,7 @@ class Pipeline:
             "id": job.id,
             "estado": job.estado.value,
             "ja_existia": job.ja_existia,
+            "fase": job.fase,
             # A url vive no job para "tentar de novo" sobreviver a um reload:
             # sem ela a tela só saberia refazer o download enquanto a aba que
             # enfileirou continuasse aberta.

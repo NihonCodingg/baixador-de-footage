@@ -72,6 +72,19 @@ class Fila:
                 return
             job.progresso = progresso  # substitui o objeto; nunca muta
 
+    def marcar_fase(self, job_id: str, fase: str | None) -> None:
+        """Muda a etapa dentro de `baixando` e zera o progresso: a barra do
+        download chegou a 100%, e a da conversão começa do zero.
+
+        NUNCA levanta, como `avisar`: roda num caminho que não pode quebrar.
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or job.estado is not EstadoJob.BAIXANDO:
+                return
+            job.fase = fase
+            job.progresso = None
+
     def transicionar(self, job_id: str, novo: EstadoJob) -> None:
         """KeyError se o job não existe; TransicaoIlegal se a regra proíbe."""
         with self._lock:

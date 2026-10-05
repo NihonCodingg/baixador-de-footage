@@ -45,6 +45,19 @@ perfis:
     postprocessors: []
     exige_ffmpeg: true
 
+  premiere_4k:
+    descricao: "4K para o Premiere — ProRes 422 HQ em .mov (~10 GB/min a 60fps)"
+    # Baixa como o edicao_4k (VP9/AV1, que o Premiere não edita bem) e, depois,
+    # converte com o ffmpeg para ProRes 422 HQ: prores_ks profile 3, 10 bits
+    # 4:2:2, áudio PCM 24 bits. O .mkv baixado FICA ao lado do .mov.
+    limite_dimensao: 2160
+    format: "bv*{dim}+ba/b{dim}/b"
+    format_sort: ["res:2160", "fps", "vcodec:vp9", "acodec:aac"]
+    merge_output_format: "mkv"
+    postprocessors: []
+    exige_ffmpeg: true
+    conversao: prores_422_hq
+
   maxima:
     descricao: "O melhor que o site tiver, sem teto — VP9/AV1, pode exigir transcode"
     # SEM TETO: nenhum {dim}, e por isso limite_dimensao é null (a carga

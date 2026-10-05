@@ -15,11 +15,17 @@ from dataclasses import dataclass
 
 from ..domain.erros import MotivoFalha, TransicaoIlegal
 from ..domain.models import Job, Progresso
+from ..domain.perfis import Conversao
 from ..download.traducao_erros import ErroDeDownload
 from .progresso import AgregadorProgresso
 
 AVISO_JA_EXISTIA = "O arquivo já existia no destino; o download foi pulado e nada foi sobrescrito."
 AVISO_HISTORICO = "O download terminou, mas o histórico não pôde ser atualizado: {erro}"
+AVISO_CONVERSAO = (
+    "A conversão para {rotulo} falhou ({erro}). O arquivo baixado está intacto "
+    "em {origem}."
+)
+FASE_CONVERTENDO = "convertendo"
 
 # Intervalo em que o laço acorda para checar o pedido de parada.
 _PASSO_S = 0.05
@@ -33,6 +39,10 @@ class Preparacao:
     url: str
     opcoes: dict
     destino: str
+    # Preenchidos só em perfil com conversão: o que fazer depois do download
+    # e onde fica o arquivo final. O histórico aponta para ESTE caminho.
+    conversao: Conversao | None = None
+    destino_convertido: str | None = None
 
 
 def _tamanho_arquivo(caminho: str) -> int | None:
@@ -60,6 +70,7 @@ class Worker:
         historico,
         preparar: Callable[[Job], Preparacao],
         avaliar_resolucao: Callable[[Job, str | None], str | None] | None = None,
+        converter: Callable[..., str] | None = None,
     ):
         self._fila = fila
         self._downloader = downloader
@@ -69,6 +80,9 @@ class Worker:
         # o perfil é regra de negócio, e nenhuma mora aqui. O worker só sabe
         # qual resolução chegou.
         self._avaliar_resolucao = avaliar_resolucao
+        # (origem, destino, conversao, ao_progredir) -> caminho convertido.
+        # Injetado: o teste não depende de um ffmpeg instalado.
+        self._converter = converter
         self._thread: threading.Thread | None = None
         self._parar = threading.Event()
 
@@ -202,7 +216,40 @@ class Worker:
             self._falhar(job, MotivoFalha.DESCONHECIDO.value, _texto(erro), registro_id=registro_id)
             return
 
+        # 5. A conversão, se o perfil pedir. Falhar aqui NÃO falha o job: o
+        #    footage baixado existe e é bom. Conclui apontando para ele, e o
+        #    aviso diz o que aconteceu.
+        if preparacao.conversao is not None and preparacao.destino_convertido:
+            caminho = self._converter_baixado(job, caminho, preparacao)
+
         self._concluir(job, caminho, resolucao["valor"], registro_id)
+
+    def _converter_baixado(self, job: Job, origem: str, preparacao: Preparacao) -> str:
+        """Devolve o caminho convertido, ou a ORIGEM se a conversão falhar."""
+        conversao = preparacao.conversao
+        if self._converter is None:
+            self._fila.avisar(job.id, AVISO_CONVERSAO.format(
+                rotulo=conversao.rotulo, erro="nenhum conversor configurado", origem=origem))
+            return origem
+
+        self._fila.marcar_fase(job.id, FASE_CONVERTENDO)
+        duracao = job.video.duracao_s
+
+        def ao_progredir(segundos: float) -> None:
+            # Progresso em SEGUNDOS de mídia, não bytes: o tamanho final do
+            # ProRes não é conhecido antes, e a duração é.
+            self._fila.atualizar_progresso(job.id, Progresso(
+                baixados=int(segundos), total=duracao or None,
+                velocidade_bps=None, eta_s=None))
+
+        try:
+            return self._converter(origem, preparacao.destino_convertido, conversao, ao_progredir)
+        except Exception as erro:  # noqa: BLE001 — conversão não derruba o worker
+            self._fila.avisar(job.id, AVISO_CONVERSAO.format(
+                rotulo=conversao.rotulo, erro=_texto(erro), origem=origem))
+            return origem
+        finally:
+            self._fila.marcar_fase(job.id, None)
 
     # ------------------------------------------------------------ desfechos
 

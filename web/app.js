@@ -679,9 +679,12 @@ function atualizarNoJob(no, j, posicao) {
 
   // a estrutura só é reconstruída quando o estado (ou o "já existia") muda
   var jaExistia = j.ja_existia ? '1' : '';
-  if (no.dataset.estado !== j.estado || no.dataset.jaExistia !== jaExistia) {
+  var fase = j.fase || '';
+  if (no.dataset.estado !== j.estado || no.dataset.jaExistia !== jaExistia ||
+      no.dataset.fase !== fase) {
     no.dataset.estado = j.estado;
     no.dataset.jaExistia = jaExistia;
+    no.dataset.fase = fase;
     no.innerHTML = estruturaJob(j, posicao);
   }
 
@@ -703,7 +706,10 @@ function atualizarNoJob(no, j, posicao) {
     if (elPct) elPct.innerHTML = pct === null ? '--<small>%</small>' : pct + '<small>%</small>';
 
     var elTam = q('[data-campo="tamanho"]');
-    if (elTam && pr) elTam.textContent = fmtBytes(pr.baixados) + ' / ' + fmtBytes(pr.total);
+    // Na conversão o progresso vem em SEGUNDOS de vídeo, não em bytes.
+    if (elTam && pr) elTam.textContent = j.fase === 'convertendo'
+      ? fmtDuracao(pr.baixados) + ' / ' + fmtDuracao(pr.total)
+      : fmtBytes(pr.baixados) + ' / ' + fmtBytes(pr.total);
     var elVel = q('[data-campo="velocidade"]');
     if (elVel && pr) elVel.textContent = fmtVelocidade(pr.velocidade_bps);
     var elEta = q('[data-campo="eta"]');
@@ -730,6 +736,9 @@ function estruturaJob(j, posicao) {
   html += '<div class="job__info">';
   html += '<div class="row row--gap">' + selo(j.estado) +
     (j.ja_existia ? '<span class="tag">já existia</span>' : '') +
+    // Depois do download, a conversão para ProRes pode levar mais que ele:
+    // sem isto o card ficaria parado em 100% sem explicação.
+    (j.fase === 'convertendo' ? '<span class="tag">convertendo para ProRes</span>' : '') +
     '<span class="tag">' + esc(j.perfil) + '</span>' +
     '<span class="tag">' + esc(rotuloProjeto(j.projeto)) + '</span></div>';
   html += '<h3 class="titulo" title="' + esc(v.titulo) + '">' + esc(v.titulo) + '</h3>';
@@ -755,7 +764,8 @@ function estruturaJob(j, posicao) {
       '<div class="prog__linha">' +
         '<div class="prog__pct mono" data-campo="pct">--<small>%</small></div>' +
         '<div class="prog__nums">' +
-          '<div><b data-campo="tamanho">--</b><span>baixado</span></div>' +
+          '<div><b data-campo="tamanho">--</b><span>' +
+            (j.fase === 'convertendo' ? 'convertido' : 'baixado') + '</span></div>' +
           '<div><b data-campo="velocidade">--</b><span>velocidade</span></div>' +
           '<div><b data-campo="eta">--</b><span>restante</span></div>' +
         '</div>' +

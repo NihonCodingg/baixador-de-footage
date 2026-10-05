@@ -413,7 +413,7 @@ def test_b11_carrega_os_quatro_perfis_reais():
     raiz = Path(__file__).resolve().parent.parent
     dados = yaml.safe_load((raiz / "config" / "perfis.yaml").read_text(encoding="utf-8"))
     perfis = carregar_perfis(dados)
-    assert set(perfis) == {"edicao_1080", "edicao_4k", "maxima", "so_audio", "preview_leve"}
+    assert set(perfis) == {"edicao_1080", "edicao_4k", "premiere_4k", "maxima", "so_audio", "preview_leve"}
     assert perfis["so_audio"].limite_dimensao is None
     assert perfis["maxima"].limite_dimensao is None, "o perfil sem teto"
     assert perfis["edicao_1080"].limite_dimensao == 1080

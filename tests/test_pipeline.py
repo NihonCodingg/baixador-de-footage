@@ -169,6 +169,7 @@ def test_config_lista_perfis_projetos_e_ffmpeg(subir):
     assert {x["nome"] for x in c["perfis"]} == {
         "edicao_1080",
         "edicao_4k",
+        "premiere_4k",
         "maxima",
         "so_audio",
         "preview_leve",
@@ -1343,3 +1344,97 @@ def test_sem_dimensao_no_hook_nao_avisa(subir, info_dict_real):
     p, _ = subir(downloader=DownloaderEco(info_dict_real))
     job = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")[0])
     assert not job["aviso"]
+
+
+# ===========================================================================
+# Perfil premiere_4k — download, conversão e o histórico apontando para o .mov
+# ===========================================================================
+
+
+class ConversorFalso:
+    """Faz o papel do ffmpeg: cria o .mov e reporta progresso. Ou falha."""
+
+    def __init__(self, falhar=False):
+        self.falhar = falhar
+        self.chamadas = []
+
+    def __call__(self, origem, destino, conversao, ao_progredir):
+        self.chamadas.append((origem, destino, conversao.rotulo))
+        ao_progredir(30.0)
+        if self.falhar:
+            raise RuntimeError("Conversion failed!")
+        Path(destino).write_bytes(b"prores")
+        return destino
+
+
+def subir_com_conversor(ambiente, info_dict_real, conversor):
+    return Pipeline(ambiente["config"], ambiente["data"],
+                    downloader=DownloaderEco(info_dict_real),
+                    detectar_ffmpeg=ffmpeg_presente, converter_midia=conversor)
+
+
+def test_premiere_4k_converte_e_o_historico_aponta_para_o_mov(ambiente, info_dict_real):
+    conversor = ConversorFalso()
+    p = subir_com_conversor(ambiente, info_dict_real, conversor)
+    try:
+        job = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="premiere_4k", projeto="pessoal")[0])
+        registro = p.historico()[0]
+    finally:
+        p.encerrar()
+    assert job["estado"] == "concluido"
+    assert job["caminho_final"].endswith(".mov")
+    assert registro["caminho"].endswith(".mov"), "o histórico aponta para o arquivo que vai para a timeline"
+    origem, destino, rotulo = conversor.chamadas[0]
+    assert origem.endswith(".mkv") and Path(origem).exists(), "o .mkv baixado fica"
+    assert rotulo == "ProRes 422 HQ"
+
+
+def test_conversao_que_falha_conclui_com_o_mkv_e_avisa(ambiente, info_dict_real):
+    """O download deu certo: o footage existe. Falhar o job seria mentir; o
+    certo é concluir apontando para o .mkv e dizer o que aconteceu."""
+    p = subir_com_conversor(ambiente, info_dict_real, ConversorFalso(falhar=True))
+    try:
+        job = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="premiere_4k", projeto="pessoal")[0])
+        registro = p.historico()[0]
+    finally:
+        p.encerrar()
+    assert job["estado"] == "concluido"
+    assert job["caminho_final"].endswith(".mkv")
+    assert "ProRes 422 HQ falhou" in job["aviso"] and "intacto" in job["aviso"]
+    assert registro["caminho"].endswith(".mkv")
+    assert Path(registro["caminho"]).exists()
+
+
+def test_perfil_sem_conversao_nao_chama_o_conversor(ambiente, info_dict_real):
+    conversor = ConversorFalso()
+    p = subir_com_conversor(ambiente, info_dict_real, conversor)
+    try:
+        esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_4k", projeto="pessoal")[0])
+    finally:
+        p.encerrar()
+    assert conversor.chamadas == []
+
+
+def test_mov_existente_ganha_sufixo_e_nao_e_sobrescrito(ambiente, info_dict_real):
+    conversor = ConversorFalso()
+    p = subir_com_conversor(ambiente, info_dict_real, conversor)
+    try:
+        previsto = p.simular([URL_REAL], "premiere_4k", "pessoal")[0]["destino"]
+        Path(previsto).parent.mkdir(parents=True, exist_ok=True)
+        Path(previsto).write_bytes(b"ProRes de outro dia")
+        job = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="premiere_4k", projeto="pessoal")[0])
+    finally:
+        p.encerrar()
+    assert job["caminho_final"].endswith(" (2).mov")
+    assert Path(previsto).read_bytes() == b"ProRes de outro dia"
+
+
+def test_dry_run_do_premiere_4k_mostra_o_mov(subir):
+    p, _ = subir()
+    assert p.simular([URL_REAL], "premiere_4k", "pessoal")[0]["destino"].endswith(".mov")
+
+
+def test_job_expoe_a_fase(subir):
+    p, _ = subir()
+    j = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")[0])
+    assert "fase" in j and j["fase"] is None, "fora da conversão a fase é nula"

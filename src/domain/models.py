@@ -240,6 +240,10 @@ class Job:
     url_original: str | None = None
     ja_existia: bool = False  # o arquivo já estava no destino
     aviso: str | None = None  # texto não-bloqueante para a tela
+    # Etapa DENTRO de `baixando`: "convertendo" quando o download terminou e o
+    # transcode ainda roda. Não é estado novo — o job não está concluído
+    # enquanto o arquivo final não existe.
+    fase: str | None = None
 
     def transicionar(self, novo: EstadoJob) -> None:
         """Aplica uma transição, recusando as ilegais. SPEC 10.2.
