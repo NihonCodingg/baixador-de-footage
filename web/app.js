@@ -741,7 +741,7 @@ function estruturaJob(j, posicao) {
     (j.ja_existia ? '<span class="tag">já existia</span>' : '') +
     // Depois do download, a conversão para ProRes pode levar mais que ele:
     // sem isto o card ficaria parado em 100% sem explicação.
-    (j.fase === 'convertendo' ? '<span class="tag">download pronto · gerando ProRes</span>' : '') +
+    (j.fase === 'convertendo' ? '<span class="tag">download pronto · convertendo para o Premiere</span>' : '') +
     '<span class="tag">' + esc(j.perfil) + '</span>' +
     '<span class="tag">' + esc(rotuloProjeto(j.projeto)) + '</span></div>';
   html += '<h3 class="titulo" title="' + esc(v.titulo) + '">' + esc(v.titulo) + '</h3>';

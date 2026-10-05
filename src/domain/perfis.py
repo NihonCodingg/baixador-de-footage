@@ -29,38 +29,55 @@ class Perfil:
 
 @dataclass(frozen=True)
 class Conversao:
-    """Um transcode para codec de edição, feito pelo ffmpeg DEPOIS do download.
+    """Um transcode para a timeline, feito pelo ffmpeg DEPOIS do download.
 
     Existe porque o yt-dlp não expressa isto: o FFmpegVideoConvertor dele só
-    recebe o container, e ProRes HQ exige `-profile:v 3` no `prores_ks`.
-    Dado puro: quem monta a linha de comando é src/download/conversao.py.
+    recebe o container. Dado puro — os argumentos do ffmpeg por etapa; quem
+    monta a linha de comando inteira é src/download/conversao.py.
+
+    `video_gpu` é tentado ANTES de `video_cpu`, com `entrada_gpu` antes do
+    `-i`. Se a placa falhar, a CPU refaz do zero.
     """
 
     rotulo: str
     container: str
-    vcodec: str
-    perfil_video: str | None
-    pix_fmt: str
-    acodec: str
-    # Codificador na placa de vídeo, tentado ANTES do de CPU. Medido numa
-    # RTX 3060 com 4K60 VP9: 2,3x mais rápido, mesmo formato e mesma qualidade
-    # (PSNR igual até a terceira casa decimal). None = só CPU.
-    vcodec_gpu: str | None = None
+    video_cpu: tuple[str, ...]
+    audio: tuple[str, ...]
+    entrada_gpu: tuple[str, ...] = ()
+    video_gpu: tuple[str, ...] | None = None
 
 
-# ProRes 422 HQ é o profile 3 do prores_ks; yuv422p10le é o que o 422 HQ
-# carrega (10 bits, 4:2:2). Áudio em PCM 24 bits: é o que a timeline espera
-# de um mezzanine. Nenhum dos dois devolve qualidade que o YouTube já tirou —
-# servem para a timeline não engasgar com VP9/AV1.
 CONVERSOES = {
+    # ProRes 422 HQ: profile 3, 10 bits 4:2:2, PCM 24 bits — o mezzanine
+    # clássico. Lento: ~0,1 a 0,36x o tempo real numa RTX 3060 com 4K60, e
+    # ~11 GB por minuto. Na GPU (Vulkan) a decodificação do VP9 fica na CPU:
+    # decodificar na placa e devolver cada quadro custou mais (medido).
     "prores_422_hq": Conversao(
         rotulo="ProRes 422 HQ",
         container="mov",
-        vcodec="prores_ks",
-        perfil_video="3",
-        pix_fmt="yuv422p10le",
-        acodec="pcm_s24le",
-        vcodec_gpu="prores_ks_vulkan",
+        video_cpu=("-c:v", "prores_ks", "-profile:v", "3", "-vendor", "apl0",
+                   "-pix_fmt", "yuv422p10le"),
+        audio=("-c:a", "pcm_s24le"),
+        entrada_gpu=("-init_hw_device", "vulkan=vk:0", "-filter_hw_device", "vk"),
+        video_gpu=("-c:v", "prores_ks_vulkan", "-profile:v", "3", "-vendor", "apl0",
+                   "-vf", "format=yuv422p10le,hwupload", "-async_depth", "4"),
+    ),
+    # H.265 inteiro na placa: NVDEC descomprime o VP9, NVENC grava o HEVC, e
+    # a CPU fica livre. Medido numa RTX 3060 com o 4K60 real: 2,3x o tempo
+    # real no preset p1, com a mesma qualidade do p5 (PSNR igual até a 2ª
+    # casa) e ~0,9 GB por minuto. `-cq 16` é alta qualidade; o VP9 de origem
+    # já veio comprimido do YouTube. `hvc1` é a marca que o Premiere e o
+    # QuickTime esperam para HEVC em .mp4.
+    "hevc_rapido": Conversao(
+        rotulo="H.265 (placa de vídeo)",
+        container="mp4",
+        # Sem NVIDIA: x264 na CPU. Lento, mas o download não se perde.
+        video_cpu=("-c:v", "libx264", "-preset", "veryfast", "-crf", "16",
+                   "-pix_fmt", "yuv420p"),
+        audio=("-c:a", "aac", "-b:a", "320k"),
+        entrada_gpu=("-hwaccel", "cuda", "-hwaccel_output_format", "cuda"),
+        video_gpu=("-c:v", "hevc_nvenc", "-preset", "p1", "-rc", "vbr", "-cq", "16",
+                   "-b:v", "0", "-maxrate", "200M", "-bufsize", "400M", "-tag:v", "hvc1"),
     ),
 }
 

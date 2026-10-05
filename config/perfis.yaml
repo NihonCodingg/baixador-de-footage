@@ -45,8 +45,22 @@ perfis:
     postprocessors: []
     exige_ffmpeg: true
 
+  premiere_4k_rapido:
+    descricao: "4K rápido para o Premiere — H.265 na placa de vídeo (~1 GB/min)"
+    # Baixa como o edicao_4k e converte INTEIRO na placa de vídeo: NVDEC
+    # descomprime o VP9 e NVENC grava H.265 em .mp4. Medido numa RTX 3060:
+    # 2,3x o tempo real — um vídeo de 10 min converte em ~4,5 min, contra
+    # ~50 min do ProRes. O Premiere abre e toca com a mesma placa.
+    limite_dimensao: 2160
+    format: "bv*{dim}+ba/b{dim}/b"
+    format_sort: ["res:2160", "fps", "vcodec:vp9", "acodec:aac"]
+    merge_output_format: "mkv"
+    postprocessors: []
+    exige_ffmpeg: true
+    conversao: hevc_rapido
+
   premiere_4k:
-    descricao: "4K para o Premiere — ProRes 422 HQ em .mov (~10 GB/min a 60fps)"
+    descricao: "4K ProRes 422 HQ para o Premiere — LENTO (~5x o vídeo, ~11 GB/min)"
     # Baixa como o edicao_4k (VP9/AV1, que o Premiere não edita bem) e, depois,
     # converte com o ffmpeg para ProRes 422 HQ: prores_ks profile 3, 10 bits
     # 4:2:2, áudio PCM 24 bits. O .mkv baixado FICA ao lado do .mov.

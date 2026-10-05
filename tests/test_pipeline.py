@@ -169,6 +169,7 @@ def test_config_lista_perfis_projetos_e_ffmpeg(subir):
     assert {x["nome"] for x in c["perfis"]} == {
         "edicao_1080",
         "edicao_4k",
+        "premiere_4k_rapido",
         "premiere_4k",
         "maxima",
         "so_audio",

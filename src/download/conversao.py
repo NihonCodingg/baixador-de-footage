@@ -28,12 +28,10 @@ def montar_comando(
     """A linha de comando, montada como LISTA: sem shell, sem aspas, e um
     caminho com espaço, acento ou `&` não vira problema.
 
-    `gpu=True` usa o codificador de placa de vídeo da conversão (Vulkan). A
-    DECODIFICAÇÃO do VP9 continua na CPU de propósito: medido, decodificar
-    na GPU e devolver cada quadro 4K para o filtro de formato custou mais do
-    que economizou (0,25x e 0,19x contra 0,36x).
+    `gpu=True` usa os argumentos de placa de vídeo da conversão, quando ela
+    os tem.
     """
-    usar_gpu = gpu and conversao.vcodec_gpu is not None
+    usar_gpu = gpu and conversao.video_gpu is not None
     comando = [
         ffmpeg,
         "-hide_banner",
@@ -42,13 +40,9 @@ def montar_comando(
         # que enchesse o buffer travaria o ffmpeg esperando alguém ler.
         "-loglevel",
         "error",
-        # -n e não -y: footage nunca é sobrescrito (SPEC 8.4). Se o destino
-        # aparecer entre a resolução de colisão e agora, o ffmpeg recusa.
+        # -n e não -y: footage nunca é sobrescrito (SPEC 8.4).
         "-n",
-    ]
-    if usar_gpu:
-        comando += ["-init_hw_device", "vulkan=vk:0", "-filter_hw_device", "vk"]
-    comando += [
+        *(conversao.entrada_gpu if usar_gpu else ()),
         "-i",
         origem,
         "-map",
@@ -56,25 +50,8 @@ def montar_comando(
         # `?`: vídeo sem trilha de áudio converte em vez de falhar.
         "-map",
         "0:a:0?",
-        "-c:v",
-        conversao.vcodec_gpu if usar_gpu else conversao.vcodec,
-    ]
-    if conversao.perfil_video is not None:
-        comando += ["-profile:v", conversao.perfil_video]
-    comando += [
-        # apl0 marca o arquivo como gerado pela Apple; alguns programas usam
-        # isso para escolher o decodificador nativo de ProRes.
-        "-vendor",
-        "apl0",
-    ]
-    if usar_gpu:
-        # O quadro vira 10 bits 4:2:2 na CPU e sobe para a placa já pronto.
-        comando += ["-vf", f"format={conversao.pix_fmt},hwupload", "-async_depth", "4"]
-    else:
-        comando += ["-pix_fmt", conversao.pix_fmt]
-    comando += [
-        "-c:a",
-        conversao.acodec,
+        *(conversao.video_gpu if usar_gpu else conversao.video_cpu),
+        *conversao.audio,
         # Progresso legível por máquina no stdout, em vez da linha de status
         # que o ffmpeg reescreve no stderr.
         "-progress",
@@ -129,7 +106,7 @@ def converter(
     # codificador, qualquer erro —, a CPU refaz do zero. Um download nunca é
     # perdido porque a GPU não colaborou. O parcial da tentativa na GPU já foi
     # apagado por _rodar, então o destino está livre de novo.
-    if conversao.vcodec_gpu is not None:
+    if conversao.video_gpu is not None:
         try:
             return _rodar(montar_comando(ffmpeg, origem, destino, conversao, gpu=True),
                           destino, ao_progredir, executar)

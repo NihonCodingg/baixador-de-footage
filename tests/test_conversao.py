@@ -247,3 +247,56 @@ def test_falha_nas_duas_levanta_e_nao_deixa_parcial(tmp_path):
     with pytest.raises(ErroDeConversao):
         converter("ffmpeg", "in.mkv", str(tmp_path / "o.mov"), PRORES, executar=falso)
     assert not (tmp_path / "o.mov").exists()
+
+
+# ===========================================================================
+# H.265 rápido, inteiro na placa de vídeo
+# ===========================================================================
+
+HEVC = CONVERSOES["hevc_rapido"]
+
+
+def test_hevc_decodifica_e_codifica_na_placa():
+    texto = " ".join(montar_comando("ffmpeg", "in.mkv", "out.mp4", HEVC, gpu=True))
+    assert "-hwaccel cuda -hwaccel_output_format cuda -i in.mkv" in texto, \
+        "o NVDEC descomprime: a CPU não toca nos quadros"
+    assert "-c:v hevc_nvenc" in texto and "-preset p1" in texto
+    assert "-tag:v hvc1" in texto, "a marca de HEVC que o Premiere espera em .mp4"
+    assert "-c:a aac" in texto
+
+
+def test_hevc_sem_placa_cai_em_x264_na_cpu():
+    texto = " ".join(montar_comando("ffmpeg", "in.mkv", "out.mp4", HEVC))
+    assert "-hwaccel" not in texto
+    assert "-c:v libx264" in texto
+
+
+def test_caminho_hevc_vira_mp4():
+    assert caminho_convertido("D:/F/v [id].mkv", HEVC) == "D:/F/v [id].mp4"
+
+
+@pytest.mark.skipif(shutil.which("nvidia-smi") is None or shutil.which("ffmpeg") is None,
+                    reason="sem placa NVIDIA ou sem ffmpeg")
+def test_hevc_real_na_placa(tmp_path):
+    """Pelo conversor do Baixador, com a placa de verdade: sai HEVC em .mp4,
+    e quem trabalhou foi a GPU (sem cair na CPU)."""
+    origem = tmp_path / "origem.mkv"
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error",
+         "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=30:duration=1",
+         "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+         "-c:v", "libvpx-vp9", "-deadline", "realtime", "-c:a", "libopus", str(origem)],
+        check=True,
+    )
+    usados = []
+
+    def espiao(cmd, **kw):
+        usados.append("gpu" if "hevc_nvenc" in cmd else "cpu")
+        return subprocess.Popen(cmd, **kw)
+
+    final = converter("ffmpeg", str(origem), str(tmp_path / "s.mp4"), HEVC, executar=espiao)
+    codec = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                            "stream=codec_name,codec_tag_string", "-of", "csv=p=0", final],
+                           capture_output=True, text=True).stdout.strip()
+    assert usados == ["gpu"]
+    assert codec == "hevc,hvc1"
