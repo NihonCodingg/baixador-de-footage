@@ -1386,7 +1386,8 @@ def test_premiere_4k_converte_e_o_historico_aponta_para_o_mov(ambiente, info_dic
     assert job["caminho_final"].endswith(".mov")
     assert registro["caminho"].endswith(".mov"), "o histórico aponta para o arquivo que vai para a timeline"
     origem, destino, rotulo = conversor.chamadas[0]
-    assert origem.endswith(".mkv") and Path(origem).exists(), "o .mkv baixado fica"
+    assert origem.endswith(".mkv")
+    assert not Path(origem).exists(), "com a conversão pronta, o .mkv original sai"
     assert rotulo == "ProRes 422 HQ"
 
 
@@ -1439,3 +1440,30 @@ def test_job_expoe_a_fase(subir):
     p, _ = subir()
     j = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")[0])
     assert "fase" in j and j["fase"] is None, "fora da conversão a fase é nula"
+
+
+def test_conversao_que_falha_mantem_o_original(ambiente, info_dict_real):
+    """Sem arquivo convertido, o .mkv é o único footage que existe."""
+    p = subir_com_conversor(ambiente, info_dict_real, ConversorFalso(falhar=True))
+    try:
+        job = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="premiere_4k", projeto="pessoal")[0])
+    finally:
+        p.encerrar()
+    assert Path(job["caminho_final"]).exists()
+
+
+def test_convertido_vazio_nao_apaga_o_original(ambiente, info_dict_real):
+    """Arquivo de 0 bytes não é conversão pronta: na dúvida, mantém."""
+    class ConversorVazio(ConversorFalso):
+        def __call__(self, origem, destino, conversao, ao_progredir):
+            self.chamadas.append((origem, destino, conversao.rotulo))
+            Path(destino).write_bytes(b"")
+            return destino
+
+    conversor = ConversorVazio()
+    p = subir_com_conversor(ambiente, info_dict_real, conversor)
+    try:
+        esperar_terminal(p, p.enfileirar([URL_REAL], perfil="premiere_4k", projeto="pessoal")[0])
+    finally:
+        p.encerrar()
+    assert Path(conversor.chamadas[0][0]).exists()

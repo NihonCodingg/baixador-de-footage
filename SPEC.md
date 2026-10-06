@@ -1019,8 +1019,10 @@ cair no disco já pronto para a timeline.
 - **Não é estado novo.** O job fica em `baixando` com `fase: "convertendo"` e
   progresso em SEGUNDOS de vídeo (o tamanho final não é conhecido antes, a
   duração é). A máquina de estados do §10.2 não muda.
-- **O `.mkv` baixado fica.** Apagar footage sozinho é o que o projeto evita. O
-  histórico aponta para o `.mov`.
+- **O `.mkv` baixado é apagado depois de uma conversão bem-sucedida**, por
+  pedido do autor: os dois arquivos lado a lado confundiam. Só sai com o
+  convertido no disco e não vazio; se a conversão falhar, ele fica. O
+  histórico aponta para o arquivo convertido.
 - **Falha na conversão não falha o job.** O download deu certo e o footage
   existe: o job conclui apontando para o `.mkv`, com aviso.
 - **Nunca sobrescreve.** A colisão do `.mov` é resolvida como a do download. E

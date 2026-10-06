@@ -27,6 +27,10 @@ AVISO_CONVERSAO = (
     "em {origem}."
 )
 FASE_CONVERTENDO = "convertendo"
+AVISO_ORIGINAL = (
+    "A conversão deu certo, mas o arquivo original não pôde ser apagado ({erro}). "
+    "Pode apagá-lo à mão: {origem}"
+)
 
 # Intervalo em que o laço acorda para checar o pedido de parada.
 _PASSO_S = 0.05
@@ -260,13 +264,37 @@ class Worker:
                 eta_s=estimar_restante(segundos, duracao, time.monotonic() - inicio)))
 
         try:
-            return self._converter(origem, preparacao.destino_convertido, conversao, ao_progredir)
+            convertido = self._converter(origem, preparacao.destino_convertido,
+                                         conversao, ao_progredir)
         except Exception as erro:  # noqa: BLE001 — conversão não derruba o worker
             self._fila.avisar(job.id, AVISO_CONVERSAO.format(
                 rotulo=conversao.rotulo, erro=_texto(erro), origem=origem))
             return origem
         finally:
             self._fila.marcar_fase(job.id, None)
+
+        self._apagar_original(job, origem, convertido)
+        return convertido
+
+    def _apagar_original(self, job: Job, origem: str, convertido: str) -> None:
+        """Apaga o download original depois de uma conversão BEM-SUCEDIDA.
+
+        Pedido do autor: o .mkv ao lado do arquivo convertido só confundia
+        ("por que estão sendo baixados dois?"). Só apaga com o convertido no
+        disco, não vazio e diferente da origem; qualquer dúvida, mantém.
+        Falha ao apagar vira aviso — o arquivo que importa já está pronto.
+        """
+        try:
+            if (os.path.normcase(os.path.abspath(convertido))
+                    == os.path.normcase(os.path.abspath(origem))):
+                return
+            if not os.path.isfile(convertido) or os.path.getsize(convertido) == 0:
+                return
+            os.remove(origem)
+        except FileNotFoundError:
+            pass
+        except OSError as erro:
+            self._fila.avisar(job.id, AVISO_ORIGINAL.format(origem=origem, erro=_texto(erro)))
 
     # ------------------------------------------------------------ desfechos
 

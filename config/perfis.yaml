@@ -63,7 +63,7 @@ perfis:
     descricao: "4K ProRes 422 HQ para o Premiere — LENTO (~5x o vídeo, ~11 GB/min)"
     # Baixa como o edicao_4k (VP9/AV1, que o Premiere não edita bem) e, depois,
     # converte com o ffmpeg para ProRes 422 HQ: prores_ks profile 3, 10 bits
-    # 4:2:2, áudio PCM 24 bits. O .mkv baixado FICA ao lado do .mov.
+    # 4:2:2, áudio PCM 24 bits. Convertido, o .mkv baixado é apagado.
     limite_dimensao: 2160
     format: "bv*{dim}+ba/b{dim}/b"
     format_sort: ["res:2160", "fps", "vcodec:vp9", "acodec:aac"]
