@@ -26,6 +26,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
 
 from ..pipeline import Conflito, EntradaInvalida, NaoEncontrado, Pipeline
@@ -36,6 +37,9 @@ HOST = "127.0.0.1"
 PORTA = 8000
 ENDERECO = f"http://{HOST}:{PORTA}"
 ESPERA_NAVEGADOR = 1.0  # segundos até o uvicorn estar ouvindo
+# Os únicos nomes pelos quais a própria máquina chama o servidor. Ver o
+# TrustedHostMiddleware em criar_app.
+HOSTS_LOCAIS = ["127.0.0.1", "localhost"]
 
 
 class CorpoInspecionar(BaseModel):
@@ -87,6 +91,13 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
     app = FastAPI(
         title="Baixador de Footage", lifespan=ciclo_de_vida, docs_url=None, redoc_url=None
     )
+
+    # Vincular em 127.0.0.1 não basta. Com DNS rebinding, um site malicioso
+    # faz o próprio domínio resolver para 127.0.0.1 e o navegador passa a
+    # tratá-lo como a mesma origem desta API: ele leria o histórico,
+    # cadastraria projeto e enfileiraria download. O cabeçalho Host continua
+    # com o domínio dele — é isso que esta checagem recusa, com 400.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=HOSTS_LOCAIS)
 
     # ----------------------------------------------------------- erros
 

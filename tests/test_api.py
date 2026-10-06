@@ -14,6 +14,9 @@ from fastapi.testclient import TestClient
 from src.pipeline import Conflito, EntradaInvalida, NaoEncontrado
 from src.web.app import HOST, PASTA_WEB, criar_app
 
+# O endereço real da aplicação: o servidor recusa qualquer outro Host.
+LOCAL = "http://127.0.0.1:8000"
+
 
 class PipelineFalso:
     """Registra chamadas e devolve respostas roteirizadas."""
@@ -150,7 +153,7 @@ def web(tmp_path):
 def cliente(web):
     pipeline = PipelineFalso()
     app = criar_app(pipeline, pasta_web=web)
-    with TestClient(app, raise_server_exceptions=False) as c:
+    with TestClient(app, base_url=LOCAL, raise_server_exceptions=False) as c:
         yield c, pipeline
 
 
@@ -376,7 +379,7 @@ def test_respostas_sao_json(cliente):
 def test_encerra_o_pipeline_ao_desligar(web):
     pipeline = PipelineFalso()
     app = criar_app(pipeline, pasta_web=web)
-    with TestClient(app):
+    with TestClient(app, base_url=LOCAL):
         assert pipeline.encerrado is False
     assert pipeline.encerrado is True
 
@@ -555,7 +558,7 @@ def test_serve_os_arquivos_reais_da_pasta_web():
     pasta web/ do repositório: sem ela servida, `python -m src.web` abre o
     navegador numa página em branco."""
     app = criar_app(PipelineFalso())  # sem pasta_web: usa a real
-    with TestClient(app) as c:
+    with TestClient(app, base_url=LOCAL) as c:
         raiz = c.get("/")
         assert raiz.status_code == 200
         assert "<title>" in raiz.text
@@ -660,3 +663,28 @@ def test_main_sobe_em_loopback_e_encerra_o_pipeline(monkeypatch, web):
     assert chamadas["host"] == "127.0.0.1"
     assert isinstance(chamadas["port"], int)
     assert pipeline.encerrado is True
+
+
+
+# ===========================================================================
+# Host: só 127.0.0.1 e localhost
+# ===========================================================================
+
+
+@pytest.mark.parametrize("host", ["evil.example.com", "192.168.0.10:8000", "attacker.test"])
+def test_recusa_host_que_nao_e_a_propria_maquina(web, host):
+    """DNS rebinding: um site malicioso faz o próprio domínio resolver para
+    127.0.0.1, e o navegador passa a tratá-lo como a mesma origem da API —
+    podendo ler o histórico, cadastrar projeto e enfileirar download. O que
+    denuncia o truque é o cabeçalho Host, que continua com o domínio dele."""
+    app = criar_app(PipelineFalso(), pasta_web=web)
+    with TestClient(app, base_url=LOCAL) as c:
+        r = c.get("/api/historico", headers={"host": host})
+    assert r.status_code == 400
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1:8000", "localhost:8000", "127.0.0.1"])
+def test_aceita_a_propria_maquina(web, host):
+    app = criar_app(PipelineFalso(), pasta_web=web)
+    with TestClient(app, base_url=LOCAL) as c:
+        assert c.get("/api/historico", headers={"host": host}).status_code == 200

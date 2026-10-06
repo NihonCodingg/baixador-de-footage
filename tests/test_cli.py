@@ -281,12 +281,14 @@ def test_perfil_inexistente_sai_com_1_e_a_mensagem_do_pipeline():
 
 def test_conflito_de_duplicata_chega_ao_terminal():
     falso = PipelineFalso(erro=Conflito(
-        "Já baixado no perfil 'edicao_1080': D:/f/v.mp4. Use forcar=true."))
+        "Já baixado no perfil 'edicao_1080': D:/f/v.mp4."))
     saida = Saida()
     codigo = main(["--perfil", "edicao_1080", "--projeto", "cliente_x", URL],
                   pipeline=falso, escrever=saida)
     assert codigo == 1
     assert "Já baixado no perfil" in saida.texto
+    # A saída é dita na língua da CLI, não com o nome do parâmetro da API.
+    assert "--forcar" in saida.texto and "forcar=true" not in saida.texto
 
 
 def test_forcar_e_repassado():
@@ -525,3 +527,32 @@ def _esperar_caminho(pipeline, job_id, espera=5.0):
                 return j["caminho_final"]
         time.sleep(0.02)
     raise AssertionError("o job não terminou")
+
+
+# ===========================================================================
+# Progresso da conversão
+# ===========================================================================
+
+from src.cli import linha_de_progresso  # noqa: E402
+
+
+def test_progresso_da_conversao_aparece_em_tempo_de_video():
+    """Bug real: na conversão o progresso vem em SEGUNDOS de vídeo, e a CLI
+    imprimia "245 B / 907 B" — bytes que não existem."""
+    convertendo = job(estado="baixando", fase="convertendo", progresso={
+        "baixados": 245, "total": 907, "percentual": 27.0,
+        "velocidade_bps": None, "eta_s": 500,
+    })
+    linha = linha_de_progresso(convertendo, 1, 1)
+    assert "4:05 / 15:07" in linha
+    assert " B " not in linha and "B /" not in linha
+    assert "convertendo" in linha
+
+
+def test_progresso_do_download_continua_em_bytes():
+    baixando = job(estado="baixando", progresso={
+        "baixados": 9437184, "total": 18874368, "percentual": 50.0,
+        "velocidade_bps": 1048576, "eta_s": 9,
+    })
+    linha = linha_de_progresso(baixando, 1, 1)
+    assert "9,0 MB / 18,0 MB" in linha and "1,0 MB/s" in linha

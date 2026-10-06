@@ -206,7 +206,7 @@ var estado = {
   pollAtivo: false,        // id do setTimeout do polling (não setInterval)
   pollEmVoo: false,
   falhasApi: 0,            // quedas seguidas da API: definem a espera
-  tinhaPendente: false,    // havia job vivo na volta anterior do polling
+  terminados: null,        // ids terminados na volta anterior (null = nenhuma ainda)
   escolhas: { perfil: null, projeto: null }
 };
 
@@ -286,10 +286,17 @@ function aplicarConfig(cfg) {
 
   // filtro de projeto do histórico
   var filtro = $('#filtro-projeto');
+  // "avulso" é o projeto que o back-end grava para os downloads em pasta
+  // avulsa: sem esta opção, eles apareciam na lista mas não eram filtráveis.
+  // O valor escolhido sobrevive à reconstrução do <select>.
+  var filtrado = filtro.value;
   filtro.innerHTML = '<option value="">Todos os projetos</option>' +
     (cfg.projetos || []).map(function (p) {
       return '<option value="' + esc(p.nome) + '">' + esc(p.rotulo) + '</option>';
-    }).join('');
+    }).join('') +
+    '<option value="avulso">Pasta avulsa</option>';
+  filtro.value = filtrado;
+  if (filtro.value !== filtrado) filtro.value = '';
 }
 
 function preencherPerfis(sel, escolhido) {
@@ -564,7 +571,9 @@ function enfileirar(indices) {
       });
       grupo.forEach(function (p) { p.enfileirado = true; });
       estado.escolhas.perfil = corpo.perfil;
-      estado.escolhas.projeto = corpo.projeto;
+      // partes[1], e não corpo.projeto: na pasta avulsa o corpo não leva
+      // projeto, e a escolha lembrada virava "undefined".
+      estado.escolhas.projeto = partes[1];
       salvarEscolhas();
       renderPreview();
       preencherSelectsPreview();
@@ -574,7 +583,7 @@ function enfileirar(indices) {
     }).catch(function (e) {
       if (registrarFalhaApi(e)) return;
       // 409 de "já baixado" ganha caminho de saída: marcar forcar e tentar de novo
-      if (e.status === 409 && /forcar=true/i.test(e.message)) {
+      if (e.status === 409 && /^Já baixado/.test(e.message)) {
         grupo.forEach(function (p) { p.forcar = true; });
         renderPreview();
         preencherSelectsPreview();
@@ -618,10 +627,17 @@ function ligarPolling() {
   if (pendente || estado.falhasApi) {
     estado.pollAtivo = setTimeout(atualizarFila, esperaAtual());
   }
-  if (estado.tinhaPendente && !pendente && !estado.falhasApi) {
-    carregarHistorico();      // o que terminou já está no banco
+  // Recarrega o histórico a CADA job que termina, não só quando a fila
+  // inteira esvazia: numa fila de cinco, o primeiro concluído não pode
+  // esperar os outros quatro para aparecer lá. O back-end grava o histórico
+  // antes de virar o estado da fila, então a linha já está pronta.
+  var terminados = estado.jobs.filter(function (j) {
+    return j.estado !== 'na_fila' && j.estado !== 'baixando';
+  }).map(function (j) { return j.id; }).join(',');
+  if (terminados !== estado.terminados && !estado.falhasApi) {
+    if (estado.terminados !== null) carregarHistorico();
+    estado.terminados = terminados;
   }
-  estado.tinhaPendente = pendente;
 }
 
 function renderFila() {
@@ -816,11 +832,20 @@ function cancelar(id) {
   });
 }
 
+/* Destino de um novo pedido: a pasta avulsa, se o original foi para uma;
+   senão o projeto. "avulso" não é projeto cadastrado — reenviado como
+   projeto, a API responde 400. */
+function destinoDe(projeto, pasta) {
+  return pasta ? { pasta: pasta } : { projeto: projeto };
+}
+
 function tentarDeNovo(id) {
   var job = estado.jobs.filter(function (j) { return j.id === id; })[0];
   var url = (job && job.url) || estado.urlPorJob[id];
   if (!job || !url) return;
-  api('POST', '/api/fila', { urls: [url], perfil: job.perfil, projeto: job.projeto, forcar: true })
+  var corpo = Object.assign({ urls: [url], perfil: job.perfil, forcar: true },
+                            destinoDe(job.projeto, job.pasta));
+  api('POST', '/api/fila', corpo)
     .then(function (r) {
       (r.ids || []).forEach(function (novo) { estado.urlPorJob[novo] = url; });
       atualizarFila();
@@ -964,7 +989,7 @@ function notaHistorico(r) {
     (interrompido && url
       ? '<button class="btn btn--mini" data-acao="refazer" data-url="' + esc(url) +
         '" data-perfil="' + esc(r.perfil) + '" data-projeto="' + esc(r.projeto) +
-        '">Baixar de novo</button>'
+        '" data-pasta="' + esc(r.pasta || '') + '">Baixar de novo</button>'
       : '') +
     '</div>';
 }
@@ -1015,9 +1040,10 @@ function alternarTentativas(botao) {
    ocupa a chave no histórico; o arquivo parcial continua onde está, e o novo
    ganha sufixo " (2)" se o nome colidir. */
 function refazer(dados) {
-  api('POST', '/api/fila', {
-    urls: [dados.url], perfil: dados.perfil, projeto: dados.projeto, forcar: true
-  }).then(function (r) {
+  api('POST', '/api/fila', Object.assign(
+    { urls: [dados.url], perfil: dados.perfil, forcar: true },
+    destinoDe(dados.projeto, dados.pasta)
+  )).then(function (r) {
     (r.ids || []).forEach(function (id) { estado.urlPorJob[id] = dados.url; });
     toast('Na fila de novo.', 'ok');
     atualizarFila();

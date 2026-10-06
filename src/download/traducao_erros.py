@@ -35,6 +35,10 @@ TABELA_MENSAGENS: list[tuple[str, MotivoFalha]] = [
     # abaixo. Sem apóstrofo na substring: o texto real usa U+2019 ("you’re"),
     # e comparar com o apóstrofo ASCII não casa.
     ("not a bot", MotivoFalha.BLOQUEIO_BOT),
+    # Disco cheio. O ffmpeg diz "No space left on device"; o Windows,
+    # "There is not enough space on the disk" (ERROR_DISK_FULL, 112).
+    ("no space left on device", MotivoFalha.DISCO),
+    ("not enough space on the disk", MotivoFalha.DISCO),
     # Falhas de LEITURA dos cookies.
     #
     # A PRIMEIRA é a que realmente chega aqui: load_cookies (cookies.py:113)

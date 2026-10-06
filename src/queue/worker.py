@@ -14,8 +14,8 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from ..domain.erros import MotivoFalha, TransicaoIlegal
-from ..domain.models import Job, Progresso
+from ..domain.erros import EspacoInsuficiente, MotivoFalha, TransicaoIlegal
+from ..domain.models import EstadoJob, Job, Progresso
 from ..domain.perfis import Conversao
 from ..download.traducao_erros import ErroDeDownload
 from .progresso import AgregadorProgresso
@@ -173,7 +173,9 @@ class Worker:
         try:
             preparacao = self._preparar(job)
         except Exception as erro:  # noqa: BLE001
-            self._falhar(job, MotivoFalha.DESCONHECIDO.value, _texto(erro), registro_id=registro_id)
+            motivo = (MotivoFalha.DISCO if isinstance(erro, EspacoInsuficiente)
+                      else MotivoFalha.DESCONHECIDO)
+            self._falhar(job, motivo.value, _texto(erro), registro_id=registro_id)
             return
 
         # O caminho pretendido vai para o histórico ANTES do download: sem
@@ -298,19 +300,35 @@ class Worker:
 
     # ------------------------------------------------------------ desfechos
 
+    # A ORDEM dos dois desfechos importa: histórico e avisos primeiro, o
+    # estado da fila POR ÚLTIMO. A tela recarrega o histórico no instante em
+    # que vê o job terminar; com a fila virando antes, ela lia a linha ainda
+    # `baixando`, sem caminho, e ficava assim até alguém recarregar a página.
+
+    def _ainda_baixando(self, job: Job) -> bool:
+        """False se parar() já marcou o job como INTERROMPIDO: um desfecho
+        tardio não mexe em nada (o arquivo, se existir, é avisado na subida
+        seguinte — decisão 5)."""
+        atual = self._fila.obter(job.id)
+        return atual is not None and atual.estado is EstadoJob.BAIXANDO
+
     def _falhar(self, job: Job, motivo: str, mensagem: str, registro_id: int | None = None) -> None:
+        if not self._ainda_baixando(job):
+            return
+        erro_historico = None
+        if registro_id is not None:
+            try:
+                self._historico.falhar(registro_id, motivo=motivo, mensagem=mensagem)
+            except Exception as erro:  # noqa: BLE001
+                erro_historico = erro
         try:
             self._fila.falhar(job.id, motivo=motivo, mensagem=mensagem)
         except TransicaoIlegal:
-            return  # já interrompido por parar(): não mexe
-        if registro_id is None:
-            return
-        try:
-            self._historico.falhar(registro_id, motivo=motivo, mensagem=mensagem)
-        except Exception as erro:  # noqa: BLE001
+            return  # interrompido entre a checagem e agora
+        if erro_historico is not None:
             # Decisão 4: não pode ser silenciosa. A fila mostra o estado
             # certo; o aviso conta que o histórico ficou para trás.
-            self._fila.avisar(job.id, AVISO_HISTORICO.format(erro=_texto(erro)))
+            self._fila.avisar(job.id, AVISO_HISTORICO.format(erro=_texto(erro_historico)))
 
     def _concluir(
         self,
@@ -321,15 +339,8 @@ class Worker:
         *,
         ja_existia: bool = False,
     ) -> None:
-        try:
-            self._fila.concluir(job.id, caminho, ja_existia=ja_existia)
-        except TransicaoIlegal:
-            # Conclusão tardia depois de parar(): o job já é INTERROMPIDO e
-            # fica assim. O arquivo pode existir no disco — a subida seguinte
-            # avisa sobre ele (decisão 5).
+        if not self._ainda_baixando(job):
             return
-        if ja_existia:
-            self._fila.avisar(job.id, AVISO_JA_EXISTIA)
 
         # A resolução do 'finished' é a REAL. Ela já era gravada; o que
         # faltava era alguém compará-la com o que o perfil pedia. "Pedi 4K e
@@ -337,20 +348,29 @@ class Worker:
         abaixo = None
         if not ja_existia and self._avaliar_resolucao is not None:
             abaixo = self._avaliar_resolucao(job, resolucao)
-            if abaixo:
-                self._fila.avisar(job.id, abaixo)
 
-        if registro_id is None:
-            return
+        erro_historico = None
+        if registro_id is not None:
+            try:
+                self._historico.concluir(
+                    registro_id,
+                    caminho=caminho,
+                    tamanho_bytes=_tamanho_arquivo(caminho),
+                    resolucao=resolucao,
+                    ja_existia=ja_existia,
+                )
+                if abaixo:
+                    self._historico.avisar(registro_id, abaixo)
+            except Exception as erro:  # noqa: BLE001
+                erro_historico = erro
+
+        if ja_existia:
+            self._fila.avisar(job.id, AVISO_JA_EXISTIA)
+        if abaixo:
+            self._fila.avisar(job.id, abaixo)
+        if erro_historico is not None:
+            self._fila.avisar(job.id, AVISO_HISTORICO.format(erro=_texto(erro_historico)))
         try:
-            self._historico.concluir(
-                registro_id,
-                caminho=caminho,
-                tamanho_bytes=_tamanho_arquivo(caminho),
-                resolucao=resolucao,
-                ja_existia=ja_existia,
-            )
-            if abaixo:
-                self._historico.avisar(registro_id, abaixo)
-        except Exception as erro:  # noqa: BLE001
-            self._fila.avisar(job.id, AVISO_HISTORICO.format(erro=_texto(erro)))
+            self._fila.concluir(job.id, caminho, ja_existia=ja_existia)
+        except TransicaoIlegal:
+            return  # interrompido entre a checagem e agora

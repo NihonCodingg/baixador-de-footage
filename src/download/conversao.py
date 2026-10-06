@@ -10,6 +10,7 @@ Não há como passar isso pela API dele.
 Ticket: perfil ProRes.
 """
 
+import os
 import subprocess
 import sys
 from collections.abc import Callable
@@ -102,18 +103,43 @@ def converter(
     if Path(destino).exists():
         raise ErroDeConversao(f"o destino já existe e não será sobrescrito: {destino}")
 
+    # O ffmpeg grava num nome `.parcial` e o arquivo só ganha o nome final no
+    # sucesso. Fechar o programa no meio manda o sinal também ao ffmpeg, que
+    # FINALIZA o que já escreveu e sai: com o nome final, sobraria um vídeo
+    # truncado que abre normal no Premiere — footage incompleto passando por
+    # completo. Uma sobra `.parcial` é deste mesmo vídeo e incompleta por
+    # definição, então a conversão nova começa do zero.
+    parcial = caminho_parcial(destino)
+    _apagar_parcial(parcial)
+
     # Placa de vídeo primeiro; se ela falhar — driver sem Vulkan, ffmpeg sem o
     # codificador, qualquer erro —, a CPU refaz do zero. Um download nunca é
     # perdido porque a GPU não colaborou. O parcial da tentativa na GPU já foi
     # apagado por _rodar, então o destino está livre de novo.
-    if conversao.video_gpu is not None:
-        try:
-            return _rodar(montar_comando(ffmpeg, origem, destino, conversao, gpu=True),
-                          destino, ao_progredir, executar)
-        except ErroDeConversao:
-            pass
-    return _rodar(montar_comando(ffmpeg, origem, destino, conversao), destino,
-                  ao_progredir, executar)
+    try:
+        if conversao.video_gpu is None:
+            raise ErroDeConversao("sem caminho na placa de vídeo")
+        _rodar(montar_comando(ffmpeg, origem, parcial, conversao, gpu=True),
+               parcial, ao_progredir, executar)
+    except ErroDeConversao:
+        _rodar(montar_comando(ffmpeg, origem, parcial, conversao), parcial,
+               ao_progredir, executar)
+
+    try:
+        # rename e não replace: no Windows ele FALHA se o destino apareceu
+        # nesse meio-tempo, em vez de sobrescrevê-lo (SPEC 8.4).
+        os.rename(parcial, destino)
+    except OSError as erro:
+        _apagar_parcial(parcial)
+        raise ErroDeConversao(f"não foi possível dar o nome final ao arquivo: {erro}") from erro
+    return destino
+
+
+def caminho_parcial(destino: str) -> str:
+    """'D:/F/v [id].mp4' -> 'D:/F/v [id].parcial.mp4'. A extensão real fica
+    no fim porque é por ela que o ffmpeg escolhe o formato de saída."""
+    base, ponto, ext = destino.rpartition(".")
+    return f"{base}.parcial.{ext}" if ponto else f"{destino}.parcial"
 
 
 def _rodar(comando, destino, ao_progredir, executar) -> str:

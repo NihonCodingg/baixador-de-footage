@@ -534,3 +534,90 @@ def test_perfil_sem_teto_nunca_avisa():
 def test_resolucao_desconhecida_nao_avisa(resolucao):
     """Avisar sem base é pior que não avisar."""
     assert aviso_resolucao(perfil("bv*{dim}+ba/b", 2160), resolucao) is None
+
+
+# ===========================================================================
+# Estimativa de espaço — o disco nunca enche no meio do download
+# ===========================================================================
+
+from src.domain.perfis import CONVERSOES, FOLGA_MINIMA, estimar_espaco, fmt_gb  # noqa: E402
+
+GB = 1024**3
+
+
+def _v(largura, altura, tamanho=None, tbr=None, fps=60, format_id="v"):
+    return Formato(format_id=format_id, ext="webm", resolucao=f"{largura}x{altura}",
+                   largura=largura, altura=altura, fps=fps, vcodec="vp9", acodec="none",
+                   tbr=tbr, tamanho_bytes=tamanho)
+
+
+def _a(tamanho, format_id="a"):
+    return Formato(format_id=format_id, ext="m4a", resolucao="audio only", largura=None,
+                   altura=None, fps=None, vcodec="none", acodec="mp4a.40.2", tbr=None,
+                   tamanho_bytes=tamanho)
+
+
+def _perfil(limite=2160, container="mkv", conversao=None):
+    return Perfil(nome="t", descricao="", limite_dimensao=limite, format="bv*{dim}+ba/b",
+                  format_sort=[], merge_output_format=container, postprocessors=[],
+                  exige_ffmpeg=True, conversao=conversao)
+
+
+def test_espaco_usa_o_maior_video_dentro_do_teto_e_o_maior_audio():
+    formatos = [_v(1920, 1080, 1 * GB), _v(3840, 2160, 3 * GB, format_id="4k"),
+                _v(7680, 4320, 9 * GB, format_id="8k"), _a(100), _a(200, "a2")]
+    # O 8K passa do teto de 2160: não conta. Erra para cima no resto.
+    assert estimar_espaco(_perfil(), formatos, 600) == 3 * GB + 200
+
+
+def test_espaco_sem_teto_conta_o_maior_de_todos():
+    formatos = [_v(3840, 2160, 3 * GB), _v(7680, 4320, 9 * GB, format_id="8k")]
+    assert estimar_espaco(_perfil(limite=None), formatos, 600) == 9 * GB
+
+
+def test_espaco_sem_tamanho_usa_taxa_vezes_duracao():
+    # 8000 kbit/s = 1 MB/s; 100 s -> 100 MB
+    assert estimar_espaco(_perfil(), [_v(3840, 2160, tbr=8000)], 100) == 100_000_000
+
+
+def test_espaco_desconhecido_devolve_none():
+    assert estimar_espaco(_perfil(), [_v(3840, 2160)], None) is None
+    assert estimar_espaco(_perfil(), [], 600) is None
+
+
+def test_espaco_so_audio_conta_so_o_audio():
+    formatos = [_v(3840, 2160, 3 * GB), _a(5_000_000)]
+    assert estimar_espaco(_perfil(limite=None, container="m4a"), formatos, 600) == 5_000_000
+
+
+def test_espaco_soma_o_convertido_porque_o_original_so_some_depois():
+    """Pico = baixado + convertido. Em 4K60 vale a taxa cheia da conversão."""
+    conv = CONVERSOES["prores_422_hq"]
+    total = estimar_espaco(_perfil(conversao="prores_422_hq"), [_v(3840, 2160, GB)], 100, conv)
+    assert total == GB + conv.bytes_por_segundo_4k60 * 100
+
+
+def test_espaco_da_conversao_escala_com_a_resolucao_mas_tem_piso():
+    conv = CONVERSOES["hevc_rapido"]
+    p = _perfil(conversao="hevc_rapido")
+    # 1440p60 = 4/9 dos pixels do 4K60
+    t1440 = estimar_espaco(p, [_v(2560, 1440, 1)], 90, conv)
+    assert t1440 == pytest.approx(conv.bytes_por_segundo_4k60 * 4 / 9 * 90, abs=2)
+    # 720p30 daria 1/18; o piso de 1/4 cobre o bitrate fixo do áudio e do container
+    t720 = estimar_espaco(p, [_v(1280, 720, 1, fps=30)], 100, conv)
+    assert t720 == pytest.approx(conv.bytes_por_segundo_4k60 * 0.25 * 100, abs=2)
+
+
+def test_espaco_com_conversao_e_sem_duracao_e_desconhecido():
+    conv = CONVERSOES["hevc_rapido"]
+    assert estimar_espaco(_perfil(conversao="hevc_rapido"), [_v(3840, 2160, GB)], None, conv) is None
+
+
+def test_toda_conversao_declara_quanto_ocupa():
+    """Uma conversão nova sem o número seria contada como zero bytes."""
+    assert all(c.bytes_por_segundo_4k60 > 0 for c in CONVERSOES.values())
+
+
+def test_fmt_gb_com_virgula():
+    assert fmt_gb(int(11.5 * GB)) == "11,5 GB"
+    assert fmt_gb(FOLGA_MINIMA) == "2,0 GB"

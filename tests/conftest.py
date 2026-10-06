@@ -59,3 +59,13 @@ class DownloaderFalso:
 @pytest.fixture
 def downloader_falso():
     return DownloaderFalso
+
+
+@pytest.fixture(autouse=True)
+def disco_com_espaco(monkeypatch):
+    """Nenhum teste depende do espaço livre REAL da máquina: sem isto, a
+    suíte quebraria num dia de disco cheio. Quem testa a recusa injeta o
+    próprio `espaco_livre` no Pipeline."""
+    import src.pipeline
+
+    monkeypatch.setattr(src.pipeline, "_espaco_livre_no_disco", lambda pasta: 10**15)

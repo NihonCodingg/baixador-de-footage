@@ -8,6 +8,7 @@ Ticket: T6.
 """
 
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -19,15 +20,18 @@ from pathlib import Path
 
 import yaml
 
-from .domain.erros import LinkInvalido, ProjetoInvalido
+from .domain.erros import EspacoInsuficiente, LinkInvalido, ProjetoInvalido
 from .domain.models import EstadoJob, Job, Video, tem_audio, tem_video
 from .domain.nomes import montar_caminho, resolver_colisao
 from .domain.perfis import (
     CONVERSOES,
+    FOLGA_MINIMA,
     aviso_resolucao,
     caminho_convertido,
     carregar_perfis,
     disponivel,
+    estimar_espaco,
+    fmt_gb,
     opcoes_ytdlp,
 )
 from .domain.projetos import NOME_AVULSO, Projeto, carregar_projetos, validar_nome
@@ -142,6 +146,7 @@ class Pipeline:
         escolher_pasta: Callable[[], str | None] | None = None,
         testar_cookies_de: Callable[..., str | None] | None = None,
         converter_midia: Callable[..., str] | None = None,
+        espaco_livre: Callable[[str], int] | None = None,
     ):
         """Carrega perfis e projetos, detecta o ffmpeg, abre o histórico e
         reconcilia os interrompidos (SPEC 10.1), sobe o worker."""
@@ -171,6 +176,8 @@ class Pipeline:
         self._testar_cookies = testar_cookies_de or testar_cookies
         # Injetado: o teste roda sem ffmpeg e sem gastar minutos em transcode.
         self._converter_midia = converter_midia or self._converter_com_ffmpeg
+        # Injetado: o teste simula um disco cheio sem encher disco nenhum.
+        self._espaco_livre = espaco_livre or _espaco_livre_no_disco
 
         self._perfis = carregar_perfis(
             self._ler_yaml("perfis.yaml"), validar_seletor=validar_seletor
@@ -276,11 +283,25 @@ class Pipeline:
                 self._videos[video.url_canonica] = video
         return video
 
+    def _ja_baixado(self, video: Video, perfil: str):
+        """A conclusão anterior deste vídeo neste perfil, SE o arquivo dela
+        ainda está no disco.
+
+        O "já baixado" existe para não duplicar footage. Com o arquivo
+        apagado — para liberar espaço, por exemplo — não há o que duplicar, e
+        recusar apontando para um caminho que não existe mais seria o
+        histórico mentindo sobre onde o arquivo está.
+        """
+        registro = self._historico.ja_baixado(video.extractor, video.video_id, perfil)
+        if registro is None or not registro.caminho or not os.path.exists(registro.caminho):
+            return None
+        return registro
+
     def _baixados(self, video: Video) -> dict:
         """Por perfil, o registro concluído — é o aviso de duplicata."""
         resultado = {}
         for nome in self._perfis:
-            registro = self._historico.ja_baixado(video.extractor, video.video_id, nome)
+            registro = self._ja_baixado(video, nome)
             if registro is not None:
                 resultado[nome] = {
                     "caminho": registro.caminho,
@@ -414,12 +435,12 @@ class Pipeline:
             except ErroDeDownload as erro:
                 raise EntradaInvalida(erro.classificacao.mensagem) from erro
 
-            ja = self._historico.ja_baixado(video.extractor, video.video_id, perfil)
+            ja = self._ja_baixado(video, perfil)
             if ja is not None and not forcar:
-                raise Conflito(
-                    f"Já baixado no perfil {perfil!r}: {ja.caminho}. "
-                    f"Use forcar=true para baixar de novo."
-                )
+                # Sem "use forcar=true": o nome do parâmetro da API não é
+                # texto para o editor. Quem diz COMO forçar é cada interface —
+                # a tela marca "baixar de novo", a CLI sugere --forcar.
+                raise Conflito(f"Já baixado no perfil {perfil!r}: {ja.caminho}.")
             if self._na_fila(video, perfil) or any(
                 j.video.video_id == video.video_id and j.perfil == perfil for j in jobs
             ):
@@ -437,11 +458,43 @@ class Pipeline:
                 )
             )
 
+        self._conferir_espaco(destino, definicao, [j.video for j in jobs])
+
         if pasta:
             with self._cache_lock:
                 for job in jobs:
                     self._destinos[job.id] = destino
         return [self._fila.adicionar(job) for job in jobs]
+
+    def _estimar(self, perfil, video: Video) -> int:
+        """Pico de bytes de um vídeo neste perfil. Sem como estimar (site que
+        não informa tamanho nem taxa), conta zero: a folga mínima ainda vale."""
+        conversao = CONVERSOES.get(perfil.conversao) if perfil.conversao else None
+        return estimar_espaco(perfil, video.formatos, video.duracao_s, conversao) or 0
+
+    def _pasta_do_job(self, job: Job) -> str | None:
+        with self._cache_lock:
+            avulso = self._destinos.get(job.id)
+        projeto = avulso or self._projetos.get(job.projeto)
+        return projeto.pasta if projeto else None
+
+    def _conferir_espaco(self, destino: Projeto, perfil, videos: list[Video]) -> None:
+        """Recusa ANTES de baixar o que não cabe no disco do destino.
+
+        Soma os pedidos novos E os que já estão na fila para o mesmo disco:
+        três vídeos de 40 GB enfileirados com 100 GB livres passariam um a um
+        e encheriam o disco no terceiro. Erra para cima de propósito — ver
+        perfis.estimar_espaco.
+        """
+        disco = _disco(destino.pasta)
+        precisa = sum(self._estimar(perfil, v) for v in videos)
+        for job in self._fila.instantaneo():
+            pasta = self._pasta_do_job(job)
+            if job.estado in _ATIVOS and pasta and _disco(pasta) == disco:
+                precisa += self._estimar(self._perfis[job.perfil], job.video)
+        livre = self._espaco_livre(destino.pasta)
+        if livre - precisa < FOLGA_MINIMA:
+            raise EntradaInvalida(_mensagem_sem_espaco(disco, precisa, livre))
 
     def _validar_destino(self, perfil: str, projeto: str | None, pasta: str | None = None):
         """Perfil e destino existem, estão disponíveis e são válidos.
@@ -551,7 +604,7 @@ class Pipeline:
             # O --dry-run existe para conferir o nome antes de gravar: num
             # perfil que converte, o nome que importa é o do .mov.
             caminho = self._destino_convertido(definicao, caminho)[1] or caminho
-            ja = self._historico.ja_baixado(video.extractor, video.video_id, perfil)
+            ja = self._ja_baixado(video, perfil)
             itens.append(
                 {
                     "ok": True,
@@ -578,6 +631,14 @@ class Pipeline:
             avulso = self._destinos.get(job.id)
         projeto = avulso or self._projetos[job.projeto]
         Path(projeto.pasta).mkdir(parents=True, exist_ok=True)
+
+        # De novo, agora: entre enfileirar e chegar a vez, o disco pode ter
+        # enchido por outro motivo. Só este job conta — os da frente já
+        # terminaram e estão no disco que o espaco_livre mede.
+        precisa = self._estimar(perfil, job.video)
+        livre = self._espaco_livre(projeto.pasta)
+        if livre - precisa < FOLGA_MINIMA:
+            raise EspacoInsuficiente(_mensagem_sem_espaco(_disco(projeto.pasta), precisa, livre))
 
         destino, aviso = self._destino(job.video, perfil, projeto)
         if aviso:
@@ -643,6 +704,9 @@ class Pipeline:
             "url": job.url_original or job.video.url_canonica,
             "perfil": job.perfil,
             "projeto": job.projeto,
+            # A pasta avulsa NÃO é um projeto: "tentar de novo" precisa dela,
+            # porque reenviar projeto="avulso" dá 400 ("não existe").
+            "pasta": self._pasta_avulsa(job),
             "criado_em": job.criado_em.isoformat(timespec="seconds"),
             "video": {
                 "id": job.video.video_id,
@@ -671,10 +735,27 @@ class Pipeline:
 
     # --------------------------------------------------------- consultas
 
+    def _pasta_avulsa(self, job: Job) -> str | None:
+        if job.projeto != NOME_AVULSO:
+            return None
+        with self._cache_lock:
+            destino = self._destinos.get(job.id)
+        return destino.pasta if destino else None
+
     def historico(
         self, termo: str | None = None, projeto: str | None = None, limite: int = 100
     ) -> list[dict]:
-        return [asdict(r) for r in self._historico.buscar(termo, projeto, limite)]
+        linhas = []
+        for r in self._historico.buscar(termo, projeto, limite):
+            linha = asdict(r)
+            # Refazer um download avulso: a pasta é a do arquivo pretendido.
+            # O histórico não guarda a pasta à parte, e não precisa — o
+            # caminho já a contém.
+            linha["pasta"] = (
+                os.path.dirname(r.caminho) if r.projeto == NOME_AVULSO and r.caminho else None
+            )
+            linhas.append(linha)
+        return linhas
 
     # -------------------------------------------------- projetos na tela
 
@@ -805,13 +886,31 @@ class Pipeline:
                 return raiz
         return None
 
+    def _gravado_pelo_baixador(self, alvo: Path) -> bool:
+        """`alvo` é um arquivo do histórico, ou a pasta exata de um deles.
+
+        Cobre o download em PASTA AVULSA, que não está em projeto nenhum: sem
+        isto, o "Abrir pasta" dele respondia 400. Continua fechado — libera
+        só a pasta onde o Baixador gravou, nunca a de cima nem a vizinha.
+        """
+        def normal(caminho) -> str:
+            return os.path.normcase(os.path.abspath(caminho))
+
+        procurado = normal(alvo)
+        for caminho in self._historico.caminhos():
+            arquivo = normal(caminho)
+            if procurado in (arquivo, os.path.dirname(arquivo)):
+                return True
+        return False
+
     def abrir_pasta(self, caminho: str) -> str:
         """Abre no explorador a pasta de `caminho`. Devolve a pasta aberta.
 
-        Só abre o que está DENTRO de um projeto configurado. A aplicação é
-        local, mas local não é sem consequência: sem esta checagem, qualquer
-        página aberta no navegador poderia mandar abrir qualquer pasta do
-        disco. O que não está num projeto é EntradaInvalida.
+        Só abre o que está DENTRO de um projeto configurado, ou o que o
+        próprio Baixador gravou (histórico). A aplicação é local, mas local
+        não é sem consequência: sem esta checagem, qualquer página aberta no
+        navegador poderia mandar abrir qualquer pasta do disco. O resto é
+        EntradaInvalida.
         """
         if not caminho or not str(caminho).strip():
             raise EntradaInvalida("Nenhum caminho informado.")
@@ -820,7 +919,7 @@ class Pipeline:
         except (OSError, ValueError) as erro:
             raise EntradaInvalida(f"Caminho inválido: {caminho}") from erro
 
-        if self._dentro_de_projeto(alvo) is None:
+        if self._dentro_de_projeto(alvo) is None and not self._gravado_pelo_baixador(alvo):
             raise EntradaInvalida(
                 "Só é possível abrir pastas dentro de um projeto configurado. "
                 f"Fora de todos eles: {caminho}"
@@ -923,3 +1022,26 @@ class Pipeline:
         self._encerrado = True
         self._worker.parar(timeout=5.0)
         self._historico.fechar()
+
+
+def _disco(pasta: str) -> str:
+    """'D:' de 'D:/Projetos/x'. É por disco que o espaço é contado."""
+    return Path(os.path.abspath(pasta)).anchor.rstrip("\\/") or os.sep
+
+
+def _espaco_livre_no_disco(pasta: str) -> int:
+    """Bytes livres no disco da pasta. A pasta pode ainda não existir (é
+    criada na hora de baixar): mede pelo primeiro antepassado que existe."""
+    alvo = Path(os.path.abspath(pasta))
+    while not alvo.exists() and alvo.parent != alvo:
+        alvo = alvo.parent
+    return shutil.disk_usage(alvo).free
+
+
+def _mensagem_sem_espaco(disco: str, precisa: int, livre: int) -> str:
+    return (
+        f"Espaço insuficiente no disco {disco} o download precisa de ~{fmt_gb(precisa)} "
+        f"(vídeo + conversão, contando a fila) e há {fmt_gb(livre)} livres. "
+        f"O Baixador sempre deixa {fmt_gb(FOLGA_MINIMA)} de folga. "
+        f"Libere espaço ou escolha uma pasta em outro disco."
+    )

@@ -75,6 +75,14 @@ class TransicaoIlegal(ErroDeDominio):
     pass
 
 
+class EspacoInsuficiente(ErroDeDominio):
+    """O destino não tem espaço para o download + conversão + folga.
+
+    Recusar ANTES é a regra: o disco cheio no meio fazia o ffmpeg falhar com
+    "Conversion failed!", sem dizer por quê, e deixava arquivo parcial.
+    """
+
+
 class NomeImpossivel(ErroDeDominio):
     """A pasta do projeto é tão profunda que não sobra espaço nem para o custo
     fixo do nome (data + id + extensão). SPEC 8.3."""

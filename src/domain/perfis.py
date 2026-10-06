@@ -45,6 +45,10 @@ class Conversao:
     audio: tuple[str, ...]
     entrada_gpu: tuple[str, ...] = ()
     video_gpu: tuple[str, ...] | None = None
+    # Teto de bytes por segundo do arquivo convertido, medido em 4K a 60fps.
+    # Serve só para estimar espaço antes de começar; resoluções menores são
+    # escaladas por pixels × fps.
+    bytes_por_segundo_4k60: int = 0
 
 
 CONVERSOES = {
@@ -61,6 +65,8 @@ CONVERSOES = {
         entrada_gpu=("-init_hw_device", "vulkan=vk:0", "-filter_hw_device", "vk"),
         video_gpu=("-c:v", "prores_ks_vulkan", "-profile:v", "3", "-vendor", "apl0",
                    "-vf", "format=yuv422p10le,hwupload", "-async_depth", "4"),
+        # Medido: o Cairn, 9:45 em 4K60, deu 106,5 GB = ~182 MB/s.
+        bytes_por_segundo_4k60=190_000_000,
     ),
     # H.265 inteiro na placa: NVDEC descomprime o VP9, NVENC grava o HEVC, e
     # a CPU fica livre. Medido numa RTX 3060 com o 4K60 real: 2,3x o tempo
@@ -78,6 +84,9 @@ CONVERSOES = {
         entrada_gpu=("-hwaccel", "cuda", "-hwaccel_output_format", "cuda"),
         video_gpu=("-c:v", "hevc_nvenc", "-preset", "p1", "-rc", "vbr", "-cq", "16",
                    "-b:v", "0", "-maxrate", "200M", "-bufsize", "400M", "-tag:v", "hvc1"),
+        # Medido: um minuto de 4K60 deu 0,99 GB; o Metroid, 15,8 GB. O teto
+        # do -maxrate é 200 Mbit/s = 25 MB/s, e é ele que vale como limite.
+        bytes_por_segundo_4k60=25_000_000,
     ),
 }
 
@@ -322,6 +331,68 @@ def caminho_convertido(destino: str, conversao: Conversao) -> str:
     """
     base, ponto, _ = destino.rpartition(".")
     return f"{base if ponto else destino}.{conversao.container}"
+
+
+FOLGA_MINIMA = 2 * 1024**3          # o disco nunca fica abaixo de 2 GB livres
+_CONTAINERS_SO_AUDIO = frozenset({"m4a", "mp3", "opus"})
+_PIXELS_4K60 = 3840 * 2160 * 60
+
+
+def _bytes_do_formato(f: Formato, duracao_s: int | None) -> int | None:
+    """Tamanho informado; senão, taxa de bits × duração."""
+    if f.tamanho_bytes:
+        return f.tamanho_bytes
+    if f.tbr and duracao_s:
+        return int(f.tbr * 1000 / 8 * duracao_s)        # tbr vem em kbit/s
+    return None
+
+
+def estimar_espaco(
+    perfil: Perfil, formatos: Sequence[Formato], duracao_s: int | None,
+    conversao: "Conversao | None" = None,
+) -> int | None:
+    """Bytes que este download vai ocupar no PICO, ou None se não der para saber.
+
+    É um TETO: pega o MAIOR vídeo que cabe no teto do perfil e o maior áudio,
+    não o que o yt-dlp vai de fato escolher. Errar para cima recusa um
+    download que talvez coubesse; errar para baixo enche o disco no meio —
+    que foi exatamente o que aconteceu, com 0 GB livres e "Conversion
+    failed!" sem explicação.
+
+    O pico é download + convertido: o original só é apagado depois que a
+    conversão termina.
+    """
+    def cabe(f: Formato) -> bool:
+        if perfil.limite_dimensao is None or not (f.largura and f.altura):
+            return True
+        return min(f.largura, f.altura) <= perfil.limite_dimensao
+
+    so_audio = perfil.merge_output_format in _CONTAINERS_SO_AUDIO
+    videos = [f for f in formatos if f.vcodec not in (None, "none", "") and cabe(f)]
+    audios = [f for f in formatos if f.vcodec in (None, "none", "") and f.acodec != "none"]
+
+    tamanho_audio = max((b for f in audios if (b := _bytes_do_formato(f, duracao_s))), default=0)
+    if so_audio:
+        return tamanho_audio or None
+
+    candidatos = [(b, f) for f in videos if (b := _bytes_do_formato(f, duracao_s))]
+    if not candidatos:
+        return None
+    tamanho_video, maior = max(candidatos, key=lambda par: par[0])
+    total = tamanho_video + tamanho_audio
+
+    if conversao is not None and conversao.bytes_por_segundo_4k60:
+        if not duracao_s:
+            return None
+        pixels = (maior.largura or 3840) * (maior.altura or 2160) * (maior.fps or 60)
+        escala = max(0.25, min(1.0, pixels / _PIXELS_4K60))
+        total += int(conversao.bytes_por_segundo_4k60 * escala * duracao_s)
+    return total
+
+
+def fmt_gb(bytes_: int) -> str:
+    """12345678901 -> '11,5 GB'. Vírgula decimal, como o resto da interface."""
+    return f"{bytes_ / 1024**3:.1f}".replace(".", ",") + " GB"
 
 
 def disponivel(perfil: Perfil, tem_ffmpeg: bool) -> bool:

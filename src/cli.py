@@ -23,7 +23,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from .pipeline import ErroDePedido, Pipeline
+from .pipeline import Conflito, ErroDePedido, Pipeline
 
 RAIZ = Path(__file__).resolve().parent.parent
 
@@ -247,6 +247,13 @@ def linha_de_progresso(job: dict, indice: int, total: int) -> str:
     pedaco = "--%" if percentual is None else f"{round(percentual):>3d}%"
     velocidade = progresso.get("velocidade_bps")
     eta = progresso.get("eta_s")
+    if job.get("fase") == "convertendo":
+        # Na conversão o progresso vem em SEGUNDOS de vídeo, não em bytes.
+        return (
+            f"  [{indice}/{total}] {pedaco}  convertendo "
+            f"{fmt_duracao(progresso.get('baixados'))} / {fmt_duracao(progresso.get('total'))}  "
+            f"restam {fmt_duracao(eta)}  {encurtar(job['video']['titulo'], 34)}"
+        )
     return (
         f"  [{indice}/{total}] {pedaco}  "
         f"{fmt_bytes(progresso.get('baixados'))} / {fmt_bytes(progresso.get('total'))}  "
@@ -403,6 +410,8 @@ def main(argv: list[str] | None = None, *, pipeline=None, escrever=None) -> int:
         # A mesma tradução em português que a web mostra: a CLI não reescreve
         # mensagem de erro (SPEC 12).
         escrever(f"Erro: {erro}")
+        if isinstance(erro, Conflito) and str(erro).startswith("Já baixado"):
+            escrever("Para baixar de novo, repita o comando com --forcar.")
         return 1
     except KeyboardInterrupt:
         escrever(

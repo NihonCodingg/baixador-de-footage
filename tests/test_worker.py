@@ -625,3 +625,50 @@ def test_estima_pelo_ritmo_medio():
 ])
 def test_sem_base_nao_estima(feitos, total, decorrido):
     assert estimar_restante(feitos, total, decorrido) is None
+
+
+# ===========================================================================
+# Ordem dos desfechos: histórico ANTES da fila
+# ===========================================================================
+
+
+class FilaEspia(Fila):
+    """Anota o que o histórico já tinha no instante em que a fila virou."""
+
+    def __init__(self, hist):
+        super().__init__()
+        self.hist = hist
+        self.no_instante = None
+
+    def concluir(self, job_id, caminho, *, ja_existia=False):
+        self.no_instante = list(self.hist.chamadas)
+        super().concluir(job_id, caminho, ja_existia=ja_existia)
+
+    def falhar(self, job_id, *, motivo, mensagem):
+        self.no_instante = list(self.hist.chamadas)
+        super().falhar(job_id, motivo=motivo, mensagem=mensagem)
+
+
+@pytest.mark.parametrize("erro", [None, ErroDeDownload(Classificacao(MotivoFalha.REDE, "x"))])
+def test_historico_e_gravado_antes_da_fila_terminar(erro):
+    """Bug real: a fila virava `concluido` antes do histórico ser gravado. A
+    tela recarrega o histórico no instante em que vê o job terminar — e lia a
+    linha ainda `baixando`, que ficava assim na tela até um F5."""
+    hist = HistoricoFalso()
+    fila = FilaEspia(hist)
+    w = Worker(fila, DownloaderRoteirizado(erro=erro), hist, preparar_simples)
+    w.iniciar()
+    try:
+        fila.adicionar(job())
+        assert hist.terminou.wait(ESPERA)
+        relogio = threading.Event()
+        for _ in range(int(ESPERA / 0.01)):
+            if fila.no_instante is not None:
+                break
+            relogio.wait(0.01)
+        desfecho = "falhar" if erro else "concluir"
+        assert any(c[0] == desfecho for c in fila.no_instante), (
+            "quando a fila terminou, o histórico ainda não sabia"
+        )
+    finally:
+        w.parar(timeout=ESPERA)

@@ -1467,3 +1467,169 @@ def test_convertido_vazio_nao_apaga_o_original(ambiente, info_dict_real):
     finally:
         p.encerrar()
     assert Path(conversor.chamadas[0][0]).exists()
+
+
+# ===========================================================================
+# Espaço em disco — nunca começar um download que não cabe
+# ===========================================================================
+
+from src.domain.perfis import FOLGA_MINIMA  # noqa: E402
+
+MB = 1_000_000
+
+
+class DownloaderPreso(DownloaderEco):
+    """Segura o download até o teste soltar: o job fica `baixando`."""
+
+    def __init__(self, info):
+        super().__init__(info)
+        self.soltar = threading.Event()
+
+    def baixar(self, url, opcoes, ao_progredir):
+        self.soltar.wait(ESPERA)
+        return super().baixar(url, opcoes, ao_progredir)
+
+
+@pytest.fixture
+def subir_com_disco(ambiente, info_dict_real):
+    criados = []
+
+    def _subir(espaco_livre, downloader=None):
+        dl = downloader or DownloaderEco(info_dict_real)
+        p = Pipeline(ambiente["config"], ambiente["data"], downloader=dl,
+                     detectar_ffmpeg=ffmpeg_presente, espaco_livre=espaco_livre)
+        criados.append(p)
+        return p, dl
+
+    yield _subir
+    for p in criados:
+        p.encerrar()
+
+
+def test_enfileirar_recusa_o_que_nao_cabe_no_disco(subir_com_disco):
+    """O edicao_1080 do vídeo do spike ocupa ~15 MB; com 1 MB acima da folga
+    ele não cabe, e é recusado ANTES de baixar qualquer byte."""
+    p, dl = subir_com_disco(lambda pasta: FOLGA_MINIMA + 1 * MB)
+    with pytest.raises(EntradaInvalida, match="Espaço insuficiente") as erro:
+        p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
+    assert "livres" in str(erro.value) and "GB" in str(erro.value)
+    assert p.estado_fila() == []
+    assert not any(c[0] == "baixar" for c in dl.chamadas)
+
+
+def test_enfileirar_aceita_o_que_cabe(subir_com_disco):
+    p, _ = subir_com_disco(lambda pasta: FOLGA_MINIMA + 100 * MB)
+    (job_id,) = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
+    assert esperar_terminal(p, job_id)["estado"] == "concluido"
+
+
+def test_enfileirar_conta_o_que_ja_esta_na_fila(subir_com_disco, info_dict_real):
+    """Cada um cabe sozinho; os dois juntos, não. Sem somar a fila, o
+    segundo passaria e o disco encheria no meio dele."""
+    dl = DownloaderPreso(info_dict_real)
+    p, _ = subir_com_disco(lambda pasta: FOLGA_MINIMA + 20 * MB, downloader=dl)
+    try:
+        p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
+        with pytest.raises(EntradaInvalida, match="Espaço insuficiente"):
+            p.enfileirar([URL_REAL], perfil="edicao_4k", projeto="pessoal")
+    finally:
+        dl.soltar.set()
+
+
+def test_disco_que_encheu_depois_de_enfileirar_falha_o_job_como_disco(subir_com_disco):
+    """Entre enfileirar e chegar a vez, outro programa encheu o disco. O
+    preparo confere de novo: falha com motivo `disco`, sem tentar baixar."""
+    leituras = []
+
+    def espaco(pasta):
+        leituras.append(pasta)
+        return FOLGA_MINIMA + (100 * MB if len(leituras) == 1 else 1 * MB)
+
+    p, dl = subir_com_disco(espaco)
+    (job_id,) = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
+    j = esperar_terminal(p, job_id)
+    assert j["estado"] == "falhou"
+    assert j["motivo_falha"] == "disco"
+    assert "Espaço insuficiente" in j["mensagem_falha"]
+    assert not any(c[0] == "baixar" for c in dl.chamadas)
+
+
+def test_tentar_de_novo_um_avulso_reenvia_a_pasta_e_nao_o_projeto(com_projetos):
+    """Bug real: o "Tentar de novo" reenviava projeto="avulso", e a API
+    respondia "Projeto 'avulso' não existe.". O job e o histórico expõem a
+    pasta, e reenviá-la funciona."""
+    p, nova, _ = com_projetos
+    ids = p.enfileirar([URL_REAL], perfil="edicao_1080", pasta=str(nova))
+    job = esperar_terminal(p, ids[0])
+    assert Path(job["pasta"]) == nova
+    assert Path(p.historico()[0]["pasta"]) == nova
+
+    with pytest.raises(EntradaInvalida, match="avulso"):
+        p.enfileirar([URL_REAL], perfil="edicao_1080", projeto=job["projeto"], forcar=True)
+    (novo,) = p.enfileirar([URL_REAL], perfil="edicao_1080", pasta=job["pasta"], forcar=True)
+    assert esperar_terminal(p, novo)["estado"] == "concluido"
+
+
+def test_job_de_projeto_nao_tem_pasta_avulsa(subir):
+    p, _ = subir()
+    (job_id,) = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
+    assert esperar_terminal(p, job_id)["pasta"] is None
+    assert p.historico()[0]["pasta"] is None
+
+
+def test_abrir_pasta_aceita_download_feito_em_pasta_avulsa(com_abridor, tmp_path):
+    """Bug real: o "Abrir pasta" de um download em pasta avulsa respondia
+    "Só é possível abrir pastas dentro de um projeto configurado", porque a
+    pasta avulsa não é projeto. O que o Baixador gravou — e está no
+    histórico — pode ser aberto."""
+    p, abertas, _ = com_abridor
+    avulsa = tmp_path / "avulsa"
+    avulsa.mkdir()
+    (job_id,) = p.enfileirar([URL_REAL], perfil="edicao_1080", pasta=str(avulsa))
+    job = esperar_terminal(p, job_id)
+    assert job["estado"] == "concluido"
+
+    assert Path(p.abrir_pasta(job["caminho_final"])) == avulsa
+    assert Path(p.abrir_pasta(str(avulsa))) == avulsa
+    assert [Path(x) for x in abertas] == [avulsa, avulsa]
+
+
+def test_abrir_pasta_avulsa_nao_vira_porta_para_o_resto_do_disco(com_abridor, tmp_path):
+    """Liberar a pasta do download NÃO libera a pasta de cima, nem a vizinha."""
+    p, abertas, _ = com_abridor
+    avulsa = tmp_path / "avulsa"
+    avulsa.mkdir()
+    (tmp_path / "vizinha").mkdir()
+    (job_id,) = p.enfileirar([URL_REAL], perfil="edicao_1080", pasta=str(avulsa))
+    esperar_terminal(p, job_id)
+
+    for fora in (tmp_path, tmp_path / "vizinha"):
+        with pytest.raises(EntradaInvalida):
+            p.abrir_pasta(str(fora))
+    assert abertas == []
+
+
+def test_ja_baixado_nao_bloqueia_quando_o_arquivo_foi_apagado(subir):
+    """O "Já baixado" existe para não duplicar footage. Se o arquivo foi
+    apagado do disco (para liberar espaço, por exemplo), não há o que
+    duplicar: recusar apontando para um caminho que não existe mais é o
+    histórico mentindo sobre onde o arquivo está."""
+    p, _ = subir()
+    (primeiro,) = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
+    job = esperar_terminal(p, primeiro)
+    Path(job["caminho_final"]).unlink()
+
+    (item,) = p.inspecionar(URL_REAL)
+    assert "edicao_1080" not in item["baixados"]
+    (novo,) = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
+    assert esperar_terminal(p, novo)["estado"] == "concluido"
+
+
+def test_ja_baixado_continua_bloqueando_com_o_arquivo_no_disco(subir):
+    p, _ = subir()
+    (primeiro,) = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
+    esperar_terminal(p, primeiro)
+    (item,) = p.inspecionar(URL_REAL)
+    assert "edicao_1080" in item["baixados"]
+    with pytest.raises(Conflito, match="Já baixado"):
+        p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")

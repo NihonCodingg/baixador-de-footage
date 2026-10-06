@@ -336,6 +336,15 @@ class Historico:
         ).linhas
         return self._linha(linhas[0] if linhas else None)
 
+    def caminhos(self) -> list[str]:
+        """Todo caminho que alguma tentativa registrou: o que o Baixador
+        gravou, ou ia gravar. É a lista do que ele pode abrir no explorador
+        fora de um projeto — o download em pasta avulsa."""
+        linhas = self._executar(
+            "SELECT DISTINCT caminho FROM historico WHERE caminho IS NOT NULL"
+        ).linhas
+        return [row["caminho"] for row in linhas]
+
     def buscar(
         self, termo: str | None = None, projeto: str | None = None, limite: int = 100
     ) -> list[RegistroHistorico]:

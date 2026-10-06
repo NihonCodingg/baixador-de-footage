@@ -300,3 +300,49 @@ def test_hevc_real_na_placa(tmp_path):
                            capture_output=True, text=True).stdout.strip()
     assert usados == ["gpu"]
     assert codec == "hevc,hvc1"
+
+
+# ===========================================================================
+# Conversão interrompida nunca deixa arquivo com o nome final
+# ===========================================================================
+
+
+def test_ffmpeg_grava_num_nome_parcial_e_so_no_fim_vira_o_final(tmp_path):
+    """Bug real: fechar o programa no meio da conversão manda o sinal ao
+    ffmpeg, que FINALIZA o arquivo e sai — um .mp4 de 3 minutos de um vídeo
+    de 15, com o nome certo, que abre normal no Premiere. Gravando num nome
+    `.parcial` e renomeando só no sucesso, o nome final só existe completo."""
+    final = tmp_path / "out.mov"
+    vistos = []
+
+    class Espiao(PopenFalso):
+        def __call__(self, comando, **kw):
+            resultado = super().__call__(comando, **kw)
+            vistos.append((comando[-1], final.exists()))
+            return resultado
+
+    assert converter("ffmpeg", "in.mkv", str(final), PRORES, executar=Espiao()) == str(final)
+    ((gravado, final_existia_durante),) = vistos
+    assert gravado != str(final) and ".parcial" in gravado
+    assert gravado.endswith(".mov"), "o ffmpeg deduz o formato pela extensão"
+    assert final_existia_durante is False
+    assert final.read_bytes() == b"mov parcial ou completo"
+    assert not (tmp_path / "out.parcial.mov").exists()
+
+
+def test_sobra_de_conversao_interrompida_e_substituida(tmp_path):
+    """O `.parcial` que sobrou de uma conversão cortada é do próprio Baixador
+    e incompleto por definição: a nova conversão começa do zero."""
+    sobra = tmp_path / "out.parcial.mov"
+    sobra.write_bytes(b"pedaco de ontem")
+    final = converter("ffmpeg", "in.mkv", str(tmp_path / "out.mov"), PRORES,
+                      executar=PopenFalso())
+    assert final == str(tmp_path / "out.mov")
+    assert not sobra.exists()
+
+
+def test_falha_nao_deixa_nem_o_parcial_nem_o_final(tmp_path):
+    falso = PopenFalso(codigo=1, stderr="Conversion failed!")
+    with pytest.raises(ErroDeConversao):
+        converter("ffmpeg", "in.mkv", str(tmp_path / "out.mov"), PRORES, executar=falso)
+    assert list(tmp_path.iterdir()) == []

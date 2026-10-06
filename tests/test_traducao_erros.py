@@ -323,3 +323,18 @@ def test_falha_de_cookie_tem_motivo_proprio(texto):
     assert c.motivo is MotivoFalha.COOKIES
     assert "cookies" in c.mensagem.lower()
     assert "Ajustes" in c.mensagem
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        # ffmpeg (merge do yt-dlp ou conversão)
+        "ERROR: Postprocessing: av_interleaved_write_frame(): No space left on device",
+        # Windows, ERROR_DISK_FULL (112)
+        "ERROR: unable to write data: [Errno 28] There is not enough space on the disk",
+    ],
+)
+def test_disco_cheio_pela_mensagem_e_disco(texto):
+    """Disco cheio que chega como TEXTO, sem OSError por baixo: o ffmpeg
+    roda em outro processo, e o yt-dlp só repassa a mensagem dele."""
+    assert classificar(DownloadError(texto)).motivo is MotivoFalha.DISCO
