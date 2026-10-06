@@ -1037,6 +1037,61 @@ detalhe.
 
 ---
 
+## 12e. Espaço em disco: recusar antes, nunca encher no meio
+
+Caso real: um download do `premiere_4k_rapido` falhou com "Conversion failed!"
+e deixou um `.temp.mkv` parcial. A causa era o disco D: com **0 GB livres** — e
+nada na mensagem dizia isso.
+
+- **Ao enfileirar**, o pipeline estima o pico de cada download
+  (`perfis.estimar_espaco`) e recusa com 400 se não couber, dizendo quanto
+  precisa e quanto há livre. Soma os jobs que já estão na fila **para o mesmo
+  disco**: três de 40 GB com 100 GB livres passariam um a um.
+- **Antes de cada download**, confere de novo só aquele job: o disco pode ter
+  enchido por outro motivo enquanto ele esperava. Não cabe: falha com motivo
+  `disco`, sem baixar nada.
+- O disco **nunca fica abaixo de 2 GB livres** (`FOLGA_MINIMA`).
+- A estimativa é um **teto**: o maior vídeo dentro do teto do perfil + o maior
+  áudio (tamanho informado, ou taxa × duração) + o arquivo convertido, porque o
+  original só é apagado depois da conversão. A taxa da conversão é medida em
+  4K60 (`Conversao.bytes_por_segundo_4k60`: ProRes 190 MB/s, H.265 25 MB/s) e
+  escalada por pixels × fps, com piso de 1/4.
+- Vídeo sem tamanho nem taxa conhecidos conta zero; só a folga vale.
+- Disco cheio que chega como **texto** ("No space left on device", "not enough
+  space on the disk") é classificado como `disco`, não `desconhecido`.
+
+## 12f. Revisão de defeitos (outubro de 2026)
+
+Cada item tem teste que falhava antes da correção.
+
+- **"Tentar de novo" de pasta avulsa** reenviava `projeto: "avulso"`, que não
+  é projeto cadastrado: 400 a cada clique. A fila e o histórico agora expõem
+  `pasta`, e a tela a reenvia.
+- **"Abrir pasta" de pasta avulsa** era recusado por estar fora dos projetos.
+  Agora vale também o que o histórico registra — só a pasta exata do arquivo.
+- **Corrida entre fila e histórico.** O worker virava o job para `concluido`
+  antes de gravar o histórico; a tela, que recarrega o histórico nesse
+  instante, ficava com a linha `baixando`. A fila agora vira por último, e a
+  tela recarrega o histórico a cada job que termina.
+- **Conversão interrompida** (fechar o programa no meio) deixava um arquivo
+  **truncado com o nome final**: o ffmpeg finaliza o que escreveu ao receber o
+  sinal. Ele agora grava em `NOME.parcial.EXT` e só renomeia no sucesso; uma
+  sobra `.parcial` é recomeçada do zero na próxima conversão.
+- **"Já baixado" com o arquivo apagado** recusava o download apontando para
+  um caminho que não existia mais. Agora só bloqueia se o arquivo está no
+  disco.
+- A mensagem do 409 dizia "Use forcar=true", nome de parâmetro da API. Cada
+  interface diz como forçar: a tela marca "baixar de novo", a CLI sugere
+  `--forcar`.
+- A CLI mostrava o progresso da conversão em **bytes**; ele vem em segundos
+  de vídeo.
+- O servidor não conferia o cabeçalho `Host`: com DNS rebinding, um site
+  malicioso conseguiria usar a API. Só `127.0.0.1` e `localhost` passam.
+- O filtro de projeto do histórico não tinha "Pasta avulsa", e voltava para
+  "Todos" sozinho ao cadastrar um projeto.
+
+---
+
 ## 13. Decisões tomadas sem consulta
 
 Registradas para revisão.

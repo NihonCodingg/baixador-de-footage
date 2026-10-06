@@ -58,7 +58,7 @@ Códigos de status que a tela precisa tratar:
 | Código | Significado | O que mostrar |
 |---|---|---|
 | 200 | Sucesso | — |
-| 400 | Entrada inválida: link, perfil ou projeto que não existe, ffmpeg ausente | A mensagem de `erro`, junto do campo que a causou |
+| 400 | Entrada inválida: link, perfil ou projeto que não existe, ffmpeg ausente. Também quando o cabeçalho `Host` não é `127.0.0.1` nem `localhost` (defesa contra DNS rebinding; a resposta é texto, não JSON) | A mensagem de `erro`, junto do campo que a causou |
 | 404 | Job inexistente (só em `DELETE /api/fila/{id}`) | A mensagem; provavelmente a fila mudou — recarregar |
 | 409 | Conflito: já baixado, já na fila, ou cancelar job em andamento | A mensagem. Para "já baixado", oferecer **baixar de novo** (`forcar`) |
 | 422 | Corpo malformado (campo faltando ou tipo errado) | Bug de integração; mostrar `erro` e logar `detalhes` |
@@ -167,6 +167,12 @@ Resposta: `{"ids": ["..."]}` — um id por job criado, na ordem das `urls`.
 **Tudo ou nada**: se qualquer link da lista for inválido ou conflitar, nada é
 enfileirado e a resposta é 400/409.
 
+**Espaço em disco**: se o download (somado ao que já está na fila para o mesmo
+disco) não couber deixando 2 GB livres, a resposta é **400** com uma mensagem
+como `Espaço insuficiente no disco D: o download precisa de ~12,3 GB (...) e há
+4,1 GB livres.` Se o disco encher depois de enfileirar, o job falha com
+`motivo_falha: "disco"` antes de baixar.
+
 ### 3.4 `GET /api/fila`
 
 Sem parâmetros. `{"jobs": [...]}` na ordem de chegada, incluindo os já
@@ -240,8 +246,11 @@ Resposta: `200 {"aberto": true, "pasta": "D:\\FOOTAGE\\pessoal"}`. Quando o
 caminho é de um arquivo, quem abre é a **pasta que o contém** — o arquivo não
 fica selecionado.
 
-**O caminho precisa estar dentro de um projeto configurado.** Qualquer outro é
-`400`, e nada é aberto. A aplicação roda no seu computador, mas isso não é
+**O caminho precisa estar dentro de um projeto configurado, ou ser um arquivo
+do histórico (ou a pasta exata dele).** A segunda regra cobre o download em
+pasta avulsa, que não está em projeto nenhum; ela libera só a pasta onde o
+Baixador gravou, nunca a de cima nem a vizinha. Qualquer outro é `400`, e nada
+é aberto. A aplicação roda no seu computador, mas isso não é
 motivo para ter um endpoint que abre qualquer pasta do disco: a checagem
 compara segmento a segmento (então `.../cliente_x_secreto` não passa por estar
 "dentro" de `.../cliente_x`), resolve `..` antes de comparar e ignora a caixa,
@@ -484,6 +493,10 @@ Vazio (`{}`) se nunca foi baixado. A tela usa isso para avisar **antes de
 enfileirar**: se o perfil selecionado está em `baixados`, mostrar "já baixado
 em &lt;caminho&gt;" e oferecer "baixar de novo". Se o usuário insistir, enviar
 `forcar: true` em `/api/fila`; sem isso a API responde 409.
+
+O "já baixado" só vale com o arquivo **ainda no disco**. Se ele foi apagado
+— para liberar espaço, por exemplo —, o vídeo não aparece em `baixados` e
+`/api/fila` aceita sem `forcar`: não há o que duplicar.
 
 ---
 
@@ -1079,7 +1092,7 @@ vertical de 65 segundos. Listas de `formatos` truncadas em 3 itens para caber.
 
 ```json
 {
-  "erro": "Já baixado no perfil 'edicao_1080': D:\\FOOTAGE\\pessoal\\20260901 - Camisa azul da Seleção críticas ao design e lembrança histórica [LzS8kB6lIm0].mp4. Use forcar=true para baixar de novo."
+  "erro": "Já baixado no perfil 'edicao_1080': D:\\FOOTAGE\\pessoal\\20260901 - Camisa azul da Seleção críticas ao design e lembrança histórica [LzS8kB6lIm0].mp4."
 }
 ```
 
