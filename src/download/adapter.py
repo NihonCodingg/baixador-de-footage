@@ -17,6 +17,7 @@ from pathlib import Path
 
 import yt_dlp
 import yt_dlp.cookies
+from yt_dlp.utils import download_range_func
 
 from ..domain.erros import MotivoFalha
 from .traducao_erros import Classificacao, ErroDeDownload, traduzir
@@ -180,6 +181,14 @@ class Downloader:
         # (medido). Escapar "%" como "%%" faz o yt-dlp devolver "%" literal.
         if isinstance(efetivas.get("outtmpl"), str):
             efetivas["outtmpl"] = efetivas["outtmpl"].replace("%", "%%")
+
+        # Trecho: o domínio manda segundos, o yt-dlp quer uma função. Sem
+        # force_keyframes_at_cuts — corte no keyframe, sem recomprimir, com
+        # alguns segundos de folga em cada ponta (decisão do autor; SPEC 12g).
+        # Medido: 10 s de um 4K do YouTube em 7,6 s, arquivo com 20 s.
+        trecho = efetivas.pop("trecho_s", None)
+        if trecho is not None:
+            efetivas["download_ranges"] = download_range_func(None, [tuple(trecho)])
 
         try:
             with self._com_cookies(efetivas) as com_cookies, self._fabrica(com_cookies) as ydl:

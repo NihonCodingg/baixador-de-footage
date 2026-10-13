@@ -387,3 +387,16 @@ def test_arquivo_que_nao_e_cookies_e_apontado(tmp_path):
     lixo = tmp_path / "c.txt"
     lixo.write_text("isto não é um arquivo de cookies\n", encoding="utf-8")
     assert analisar_arquivo_cookies(lixo)
+
+
+def test_trecho_vira_download_ranges_sem_recomprimir():
+    """O domínio entrega segundos; só o adapter conhece o download_ranges do
+    yt-dlp. Sem force_keyframes_at_cuts: corte no keyframe, sem recompressão
+    (decisão do autor — rápido, com alguns segundos de folga)."""
+    YDL = fabrica(info={"requested_downloads": [{"filepath": "D:/x.mp4"}]})
+    Downloader(fabrica_ydl=YDL).baixar(URL, {"outtmpl": "D:/x.mp4", "trecho_s": (90, 165)},
+                                       lambda _: None)
+    opcoes = YDL.instancias[-1].opcoes
+    assert "trecho_s" not in opcoes
+    assert list(opcoes["download_ranges"]({}, None)) == [{"start_time": 90, "end_time": 165}]
+    assert not opcoes.get("force_keyframes_at_cuts")

@@ -621,3 +621,33 @@ def test_toda_conversao_declara_quanto_ocupa():
 def test_fmt_gb_com_virgula():
     assert fmt_gb(int(11.5 * GB)) == "11,5 GB"
     assert fmt_gb(FOLGA_MINIMA) == "2,0 GB"
+
+
+# ===========================================================================
+# Trecho (SPEC 12g)
+# ===========================================================================
+
+from src.domain.trecho import Trecho  # noqa: E402
+
+
+def test_opcoes_levam_o_trecho_em_segundos():
+    p = validar_perfil("x", BOM)
+    opcoes = opcoes_ytdlp(p, [fmt(1080, 1920)], "D:/F/v.mp4", trecho=Trecho(90, 165))
+    assert opcoes["trecho_s"] == (90, 165)
+    assert "trecho_s" not in opcoes_ytdlp(p, [fmt(1080, 1920)], "D:/F/v.mp4")
+
+
+def test_espaco_de_um_trecho_e_proporcional_com_folga():
+    """10 min de vídeo, trecho de 1 min: conta 1 min + a folga do corte no
+    keyframe (medido: ~5 s em cada ponta), não o vídeo inteiro."""
+    inteiro = estimar_espaco(_perfil(), [_v(3840, 2160, 600 * MB_)], 600)
+    trecho = estimar_espaco(_perfil(), [_v(3840, 2160, 600 * MB_)], 600, trecho_s=60)
+    assert trecho == pytest.approx(inteiro * (60 + 20) / 600, rel=0.01)
+
+
+def test_espaco_de_trecho_nunca_passa_do_inteiro():
+    inteiro = estimar_espaco(_perfil(), [_v(3840, 2160, GB)], 30)
+    assert estimar_espaco(_perfil(), [_v(3840, 2160, GB)], 30, trecho_s=25) == inteiro
+
+
+MB_ = 1024**2

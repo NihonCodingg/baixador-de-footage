@@ -69,7 +69,7 @@ class HistoricoFalso:
         self.falhar_em_desfecho = None
         self._proximo_id = 0
 
-    def iniciar(self, video, *, perfil, projeto, url_original):
+    def iniciar(self, video, *, perfil, projeto, url_original, trecho=None):
         self.chamadas.append(("iniciar", video.video_id, perfil, projeto, url_original))
         if self.falhar_em_iniciar:
             raise self.falhar_em_iniciar

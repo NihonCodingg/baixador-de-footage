@@ -57,6 +57,7 @@ class RegistroHistorico:
     mensagem_falha: str | None
     criado_em: str
     concluido_em: str | None
+    trecho: str | None = None  # '90-165'; None = vídeo inteiro
 
 
 _COLUNAS = [f.name for f in fields(RegistroHistorico)]
@@ -164,6 +165,12 @@ class Historico:
         with self._lock:
             self._exigir_aberto()
             self._con.executescript(SCHEMA.read_text(encoding="utf-8"))
+            # Migração: o CREATE TABLE IF NOT EXISTS não mexe numa tabela que
+            # já existe, então um banco de antes do trecho não ganharia a
+            # coluna. ADD COLUMN não toca nas linhas que já estão lá.
+            colunas = {row["name"] for row in self._con.execute("PRAGMA table_info(historico)")}
+            if "trecho" not in colunas:
+                self._con.execute("ALTER TABLE historico ADD COLUMN trecho TEXT")
             self._con.commit()
 
     def fechar(self) -> None:
@@ -182,7 +189,8 @@ class Historico:
     # --------------------------------------------------------------- escrita
 
     def iniciar(
-        self, video: Video, *, perfil: str, projeto: str, url_original: str
+        self, video: Video, *, perfil: str, projeto: str, url_original: str,
+        trecho: str | None = None,
     ) -> RegistroHistorico:
         """Grava uma NOVA linha `baixando` e devolve o registro criado.
 
@@ -194,10 +202,10 @@ class Historico:
                 """
                 INSERT INTO historico (
                     extractor, video_id, perfil, url_original, url_canonica,
-                    titulo, titulo_busca, canal, duracao_s, projeto,
+                    titulo, titulo_busca, canal, duracao_s, projeto, trecho,
                     caminho, tamanho_bytes, resolucao, status, ja_existia,
                     aviso, motivo_falha, mensagem_falha, criado_em, concluido_em
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                           NULL, NULL, NULL, 'baixando', 0, NULL, NULL, NULL, ?, NULL)
                 """,
                 (
@@ -211,6 +219,7 @@ class Historico:
                     video.canal,
                     video.duracao_s,
                     projeto,
+                    trecho,
                     self._agora(),
                 ),
             )
@@ -320,7 +329,8 @@ class Historico:
         return self._linha(linhas[0] if linhas else None)
 
     def ja_baixado(self, extractor: str, video_id: str, perfil: str) -> RegistroHistorico | None:
-        """A tentativa CONCLUÍDA mais recente da tripla, ou None.
+        """A tentativa CONCLUÍDA mais recente da tripla, ou None. Só do vídeo
+        INTEIRO: ter um trecho não é ter o vídeo (SPEC 12g).
 
         Alimenta o aviso de duplicata. Uma falha posterior não apaga o
         arquivo que está no disco, então continua devolvendo a conclusão
@@ -330,6 +340,7 @@ class Historico:
             """
             SELECT * FROM historico
              WHERE extractor = ? AND video_id = ? AND perfil = ? AND status = 'concluido'
+               AND trecho IS NULL
              ORDER BY criado_em DESC, id DESC LIMIT 1
             """,
             (extractor, video_id, perfil),

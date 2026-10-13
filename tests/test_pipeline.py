@@ -1698,3 +1698,94 @@ def test_arquivo_de_cookies_sem_login_aparece_nos_ajustes(ambiente, info_dict_re
         assert "LOGIN_INFO" in c["motivo"] and "cookies.txt" in c["motivo"]
     finally:
         p.encerrar()
+
+
+# ===========================================================================
+# Trecho (SPEC 12g) — o vídeo do spike tem 65 s
+# ===========================================================================
+
+
+def test_trecho_vai_ao_yt_dlp_ao_nome_a_fila_e_ao_historico(subir):
+    p, dl = subir()
+    (job_id,) = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal",
+                             inicio="0:10", fim="0:20")
+    job = esperar_terminal(p, job_id)
+    assert job["estado"] == "concluido"
+    assert job["trecho"] == {"inicio_s": 10, "fim_s": 20, "tela": "0:10–0:20"}
+    assert job["caminho_final"].endswith("trecho 0m10s-0m20s.mp4")
+    (_, _, opcoes) = next(c for c in dl.chamadas if c[0] == "baixar")
+    assert opcoes["trecho_s"] == (10, 20)
+    assert p.historico()[0]["trecho"] == "10-20"
+
+
+def test_trecho_invalido_e_recusado_com_a_mensagem(subir):
+    p, _ = subir()
+    with pytest.raises(EntradaInvalida, match="1:05"):
+        p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal", inicio="0:10", fim="5:00")
+    with pytest.raises(EntradaInvalida, match="antes"):
+        p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal", inicio="0:30", fim="0:10")
+    assert p.estado_fila() == []
+
+
+def test_trecho_que_cobre_tudo_e_download_inteiro(subir):
+    p, _ = subir()
+    (job_id,) = p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal",
+                             inicio="0", fim="1:05")
+    job = esperar_terminal(p, job_id)
+    assert job["trecho"] is None and "trecho" not in Path(job["caminho_final"]).name
+
+
+def test_ja_baixado_inteiro_nao_bloqueia_trecho_nem_o_contrario(subir):
+    p, _ = subir()
+    esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal",
+                                     inicio="0:10", fim="0:20")[0])
+    # o trecho não conta como "já baixado" do vídeo
+    inteiro = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080",
+                                               projeto="pessoal")[0])
+    assert inteiro["estado"] == "concluido"
+    # e o inteiro não impede outro trecho
+    outro = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal",
+                                             inicio="0:30", fim="0:40")[0])
+    assert outro["estado"] == "concluido"
+
+
+def test_trechos_diferentes_convivem_na_fila_o_mesmo_nao(subir_com_disco, info_dict_real):
+    dl = DownloaderPreso(info_dict_real)
+    p, _ = subir_com_disco(lambda pasta: 10**15, downloader=dl)
+    try:
+        p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal", inicio="0:10", fim="0:20")
+        p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal", inicio="0:30", fim="0:40")
+        with pytest.raises(Conflito, match="fila"):
+            p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal",
+                         inicio="0:10", fim="0:20")
+    finally:
+        dl.soltar.set()
+
+
+def test_simular_mostra_o_nome_com_o_trecho(subir):
+    p, _ = subir()
+    (item,) = p.simular([URL_REAL], perfil="edicao_1080", projeto="pessoal",
+                        inicio="0:10", fim="0:20")
+    assert item["destino"].endswith("trecho 0m10s-0m20s.mp4")
+
+
+def test_conversao_de_trecho_conta_a_duracao_do_trecho(ambiente, info_dict_real):
+    """Caso 11: o arquivo a converter dura o TRECHO (10 s), não o vídeo
+    (65 s). Com a duração do vídeo, a barra pararia em 15% e o "restante"
+    mentiria. Nome do .mp4 final também leva o trecho."""
+    vistos = []
+
+    def conversor(origem, destino, conversao, ao_progredir):
+        ao_progredir(5.0)
+        vistos.append([j["progresso"] for j in p.estado_fila() if j["estado"] == "baixando"][0])
+        Path(destino).write_bytes(b"hevc")
+        return destino
+
+    p = subir_com_conversor(ambiente, info_dict_real, conversor)
+    try:
+        job = esperar_terminal(p, p.enfileirar([URL_REAL], perfil="premiere_4k_rapido",
+                                               projeto="pessoal", inicio="0:10", fim="0:20")[0])
+    finally:
+        p.encerrar()
+    assert vistos[0]["total"] == 10 and vistos[0]["percentual"] == 50.0
+    assert Path(job["caminho_final"]).name.endswith("trecho 0m10s-0m20s.mp4")

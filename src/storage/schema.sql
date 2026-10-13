@@ -23,6 +23,10 @@
 -- aviso: texto não-bloqueante acumulado (arquivo já existia, histórico
 --   indisponível, interrompido com arquivo no destino).
 --
+-- trecho: '90-165' (segundos) quando só um pedaço do vídeo foi baixado; NULL
+--   é o vídeo inteiro. `ja_baixado` só olha o inteiro (SPEC 12g). Bancos
+--   anteriores ganham a coluna em criar_schema(), sem perder nada.
+--
 -- titulo_busca: título normalizado (minúsculas, sem acento) para a busca.
 --   O LIKE do SQLite só ignora caixa em ASCII: 'Ç' não casa com 'ç'.
 
@@ -38,6 +42,7 @@ CREATE TABLE IF NOT EXISTS historico (
     canal           TEXT,
     duracao_s       INTEGER,
     projeto         TEXT    NOT NULL,
+    trecho          TEXT,
     caminho         TEXT,
     tamanho_bytes   INTEGER,
     resolucao       TEXT,

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import yaml
 
-from .domain.erros import EspacoInsuficiente, LinkInvalido, ProjetoInvalido
+from .domain.erros import EspacoInsuficiente, LinkInvalido, ProjetoInvalido, TrechoInvalido
 from .domain.models import EstadoJob, Job, Video, tem_audio, tem_video
 from .domain.nomes import montar_caminho, resolver_colisao
 from .domain.perfis import (
@@ -34,6 +34,7 @@ from .domain.perfis import (
     fmt_gb,
     opcoes_ytdlp,
 )
+from .domain.trecho import Trecho, montar_trecho
 from .domain.projetos import NOME_AVULSO, Projeto, carregar_projetos, validar_nome
 from .domain.validacao import normalizar_link, normalizar_lote
 from .download.adapter import (
@@ -403,14 +404,24 @@ class Pipeline:
 
     # ------------------------------------------------------------- fila
 
-    def _na_fila(self, video: Video, perfil: str) -> bool:
+    def _na_fila(self, video: Video, perfil: str, trecho: Trecho | None = None) -> bool:
+        """Mesmo vídeo, perfil E trecho. Trechos diferentes do mesmo vídeo
+        são arquivos diferentes, e convivem na fila (SPEC 12g)."""
         return any(
             j.estado in _ATIVOS
             and j.perfil == perfil
             and j.video.extractor == video.extractor
             and j.video.video_id == video.video_id
+            and j.trecho == trecho
             for j in self._fila.instantaneo()
         )
+
+    @staticmethod
+    def _trecho(video: Video, inicio: str | None, fim: str | None) -> Trecho | None:
+        try:
+            return montar_trecho(inicio, fim, video.duracao_s)
+        except TrechoInvalido as erro:
+            raise EntradaInvalida(str(erro)) from erro
 
     def enfileirar(
         self,
@@ -419,8 +430,13 @@ class Pipeline:
         projeto: str | None = None,
         forcar: bool = False,
         pasta: str | None = None,
+        inicio: str | None = None,
+        fim: str | None = None,
     ) -> list[str]:
         """Devolve os ids dos jobs. EntradaInvalida / Conflito.
+
+        `inicio` e `fim` pedem só um TRECHO de cada vídeo, como o editor
+        digitou ("1:30"); vazios, o vídeo inteiro (SPEC 12g).
 
         Tudo ou nada: valida todos os links (inclusive duplicatas) antes de
         enfileirar o primeiro.
@@ -446,14 +462,18 @@ class Pipeline:
             except ErroDeDownload as erro:
                 raise EntradaInvalida(erro.classificacao.mensagem) from erro
 
-            ja = self._ja_baixado(video, perfil)
+            trecho = self._trecho(video, inicio, fim)
+            # "Já baixado" é do vídeo INTEIRO: um trecho é outro arquivo, e
+            # ter o vídeo não impede tirar um pedaço dele (SPEC 12g).
+            ja = self._ja_baixado(video, perfil) if trecho is None else None
             if ja is not None and not forcar:
                 # Sem "use forcar=true": o nome do parâmetro da API não é
                 # texto para o editor. Quem diz COMO forçar é cada interface —
                 # a tela marca "baixar de novo", a CLI sugere --forcar.
                 raise Conflito(f"Já baixado no perfil {perfil!r}: {ja.caminho}.")
-            if self._na_fila(video, perfil) or any(
-                j.video.video_id == video.video_id and j.perfil == perfil for j in jobs
+            if self._na_fila(video, perfil, trecho) or any(
+                j.video.video_id == video.video_id and j.perfil == perfil and j.trecho == trecho
+                for j in jobs
             ):
                 raise Conflito(f"Este vídeo já está na fila no perfil {perfil!r}.")
 
@@ -466,10 +486,11 @@ class Pipeline:
                     estado=EstadoJob.NA_FILA,
                     criado_em=datetime.now(timezone.utc),
                     url_original=link.original,
+                    trecho=trecho,
                 )
             )
 
-        self._conferir_espaco(destino, definicao, [j.video for j in jobs])
+        self._conferir_espaco(destino, definicao, jobs)
 
         if pasta:
             with self._cache_lock:
@@ -477,11 +498,13 @@ class Pipeline:
                     self._destinos[job.id] = destino
         return [self._fila.adicionar(job) for job in jobs]
 
-    def _estimar(self, perfil, video: Video) -> int:
-        """Pico de bytes de um vídeo neste perfil. Sem como estimar (site que
+    def _estimar(self, perfil, job: Job) -> int:
+        """Pico de bytes de um job neste perfil. Sem como estimar (site que
         não informa tamanho nem taxa), conta zero: a folga mínima ainda vale."""
         conversao = CONVERSOES.get(perfil.conversao) if perfil.conversao else None
-        return estimar_espaco(perfil, video.formatos, video.duracao_s, conversao) or 0
+        trecho_s = job.trecho.duracao_s if job.trecho else None
+        video = job.video
+        return estimar_espaco(perfil, video.formatos, video.duracao_s, conversao, trecho_s) or 0
 
     def _pasta_do_job(self, job: Job) -> str | None:
         with self._cache_lock:
@@ -489,7 +512,7 @@ class Pipeline:
         projeto = avulso or self._projetos.get(job.projeto)
         return projeto.pasta if projeto else None
 
-    def _conferir_espaco(self, destino: Projeto, perfil, videos: list[Video]) -> None:
+    def _conferir_espaco(self, destino: Projeto, perfil, novos: list[Job]) -> None:
         """Recusa ANTES de baixar o que não cabe no disco do destino.
 
         Soma os pedidos novos E os que já estão na fila para o mesmo disco:
@@ -498,11 +521,11 @@ class Pipeline:
         perfis.estimar_espaco.
         """
         disco = _disco(destino.pasta)
-        precisa = sum(self._estimar(perfil, v) for v in videos)
+        precisa = sum(self._estimar(perfil, j) for j in novos)
         for job in self._fila.instantaneo():
             pasta = self._pasta_do_job(job)
             if job.estado in _ATIVOS and pasta and _disco(pasta) == disco:
-                precisa += self._estimar(self._perfis[job.perfil], job.video)
+                precisa += self._estimar(self._perfis[job.perfil], job)
         livre = self._espaco_livre(destino.pasta)
         if livre - precisa < FOLGA_MINIMA:
             raise EntradaInvalida(_mensagem_sem_espaco(disco, precisa, livre))
@@ -550,7 +573,9 @@ class Pipeline:
         # coluna `caminho` do histórico, que é exata.
         return Projeto(nome=NOME_AVULSO, rotulo="Pasta avulsa", pasta=str(alvo))
 
-    def _destino(self, video: Video, perfil, projeto: Projeto) -> tuple[str, str | None]:
+    def _destino(
+        self, video: Video, perfil, projeto: Projeto, trecho: Trecho | None = None
+    ) -> tuple[str, str | None]:
         """Onde o arquivo vai cair, e o aviso de pasta profunda demais.
 
         Não cria pasta e não baixa: é o MESMO cálculo que o worker usa e que o
@@ -563,11 +588,18 @@ class Pipeline:
             video.video_id,
             video.data_upload,
             "." + perfil.merge_output_format,
+            sufixo=trecho.para_nome() if trecho else None,
         )
         return resolver_colisao(montado.caminho, os.path.exists), montado.aviso
 
     def simular(
-        self, urls: list[str], perfil: str, projeto: str | None = None, pasta: str | None = None
+        self,
+        urls: list[str],
+        perfil: str,
+        projeto: str | None = None,
+        pasta: str | None = None,
+        inicio: str | None = None,
+        fim: str | None = None,
     ) -> list[dict]:
         """O que `enfileirar` faria, sem baixar nada e sem criar pasta.
 
@@ -611,11 +643,17 @@ class Pipeline:
                 )
                 continue
 
-            caminho, aviso_nome = self._destino(video, definicao, destino_projeto)
+            try:
+                trecho = montar_trecho(inicio, fim, video.duracao_s)
+            except TrechoInvalido as erro:
+                itens.append({"ok": False, "original": url, "url": link.url,
+                              "erro": str(erro), "motivo": "trecho_invalido"})
+                continue
+            caminho, aviso_nome = self._destino(video, definicao, destino_projeto, trecho)
             # O --dry-run existe para conferir o nome antes de gravar: num
             # perfil que converte, o nome que importa é o do .mov.
             caminho = self._destino_convertido(definicao, caminho)[1] or caminho
-            ja = self._ja_baixado(video, perfil)
+            ja = self._ja_baixado(video, perfil) if trecho is None else None
             itens.append(
                 {
                     "ok": True,
@@ -646,17 +684,17 @@ class Pipeline:
         # De novo, agora: entre enfileirar e chegar a vez, o disco pode ter
         # enchido por outro motivo. Só este job conta — os da frente já
         # terminaram e estão no disco que o espaco_livre mede.
-        precisa = self._estimar(perfil, job.video)
+        precisa = self._estimar(perfil, job)
         livre = self._espaco_livre(projeto.pasta)
         if livre - precisa < FOLGA_MINIMA:
             raise EspacoInsuficiente(_mensagem_sem_espaco(_disco(projeto.pasta), precisa, livre))
 
-        destino, aviso = self._destino(job.video, perfil, projeto)
+        destino, aviso = self._destino(job.video, perfil, projeto, job.trecho)
         if aviso:
             with self._cache_lock:
                 self._avisos[job.id] = aviso
 
-        opcoes = opcoes_ytdlp(perfil, job.video.formatos, destino)
+        opcoes = opcoes_ytdlp(perfil, job.video.formatos, destino, job.trecho)
         conversao, final = self._destino_convertido(perfil, destino)
         return Preparacao(
             url=job.video.url_canonica,
@@ -718,6 +756,11 @@ class Pipeline:
             # A pasta avulsa NÃO é um projeto: "tentar de novo" precisa dela,
             # porque reenviar projeto="avulso" dá 400 ("não existe").
             "pasta": self._pasta_avulsa(job),
+            "trecho": (
+                {"inicio_s": job.trecho.inicio_s, "fim_s": job.trecho.fim_s,
+                 "tela": job.trecho.para_tela()}
+                if job.trecho else None
+            ),
             "criado_em": job.criado_em.isoformat(timespec="seconds"),
             "video": {
                 "id": job.video.video_id,

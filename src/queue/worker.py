@@ -162,6 +162,7 @@ class Worker:
                 perfil=job.perfil,
                 projeto=job.projeto,
                 url_original=job.url_original or job.video.url_canonica,
+                trecho=job.trecho.para_texto() if job.trecho else None,
             )
         except Exception as erro:  # noqa: BLE001
             self._falhar(job, MotivoFalha.DISCO.value, f"histórico indisponível: {_texto(erro)}")
@@ -253,7 +254,9 @@ class Worker:
             return origem
 
         self._fila.marcar_fase(job.id, FASE_CONVERTENDO)
-        duracao = job.video.duracao_s
+        # Num trecho, o arquivo a converter dura o TRECHO, não o vídeo: com a
+        # duração do vídeo, a barra pararia em 10% e o "restante" mentiria.
+        duracao = job.trecho.duracao_s if job.trecho else job.video.duracao_s
 
         inicio = time.monotonic()
 

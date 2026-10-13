@@ -46,8 +46,10 @@ class PipelineFalso:
             }
         ]
 
-    def enfileirar(self, urls, perfil, projeto=None, forcar=False, pasta=None):
+    def enfileirar(self, urls, perfil, projeto=None, forcar=False, pasta=None,
+                   inicio=None, fim=None):
         self.chamadas.append(("enfileirar", list(urls), perfil, projeto, forcar, pasta))
+        self.trecho = (inicio, fim)
         if self.erro_enfileirar:
             raise self.erro_enfileirar
         return ["id-1", "id-2"][: len(urls)]
@@ -688,3 +690,17 @@ def test_aceita_a_propria_maquina(web, host):
     app = criar_app(PipelineFalso(), pasta_web=web)
     with TestClient(app, base_url=LOCAL) as c:
         assert c.get("/api/historico", headers={"host": host}).status_code == 200
+
+
+def test_fila_repassa_o_trecho(cliente):
+    c, p = cliente
+    r = c.post("/api/fila", json={"urls": ["u"], "perfil": "x", "projeto": "y",
+                                  "inicio": "1:30", "fim": "2:45"})
+    assert r.status_code == 200
+    assert p.trecho == ("1:30", "2:45")
+
+
+def test_fila_sem_trecho_e_o_video_inteiro(cliente):
+    c, p = cliente
+    c.post("/api/fila", json={"urls": ["u"], "perfil": "x", "projeto": "y"})
+    assert p.trecho == (None, None)

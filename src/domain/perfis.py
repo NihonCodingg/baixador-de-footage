@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from .erros import PerfilInvalido
 from .models import Formato
+from .trecho import Trecho
 
 
 @dataclass(frozen=True)
@@ -334,6 +335,9 @@ def caminho_convertido(destino: str, conversao: Conversao) -> str:
 
 
 FOLGA_MINIMA = 2 * 1024**3          # o disco nunca fica abaixo de 2 GB livres
+# Um trecho cortado no keyframe vem com alguns segundos a mais em cada ponta
+# (medido: ~5 s de cada lado num 4K do YouTube). Conta-se o dobro, por teto.
+FOLGA_TRECHO_S = 20
 _CONTAINERS_SO_AUDIO = frozenset({"m4a", "mp3", "opus"})
 _PIXELS_4K60 = 3840 * 2160 * 60
 
@@ -349,7 +353,7 @@ def _bytes_do_formato(f: Formato, duracao_s: int | None) -> int | None:
 
 def estimar_espaco(
     perfil: Perfil, formatos: Sequence[Formato], duracao_s: int | None,
-    conversao: "Conversao | None" = None,
+    conversao: "Conversao | None" = None, trecho_s: int | None = None,
 ) -> int | None:
     """Bytes que este download vai ocupar no PICO, ou None se não der para saber.
 
@@ -361,6 +365,9 @@ def estimar_espaco(
 
     O pico é download + convertido: o original só é apagado depois que a
     conversão termina.
+
+    `trecho_s` é a duração do trecho pedido: o tamanho cai na proporção, com
+    a folga do corte no keyframe, e nunca passa do vídeo inteiro.
     """
     def cabe(f: Formato) -> bool:
         if perfil.limite_dimensao is None or not (f.largura and f.altura):
@@ -387,6 +394,8 @@ def estimar_espaco(
         pixels = (maior.largura or 3840) * (maior.altura or 2160) * (maior.fps or 60)
         escala = max(0.25, min(1.0, pixels / _PIXELS_4K60))
         total += int(conversao.bytes_por_segundo_4k60 * escala * duracao_s)
+    if trecho_s is not None and duracao_s:
+        total = int(total * min(1.0, (trecho_s + FOLGA_TRECHO_S) / duracao_s))
     return total
 
 
@@ -404,7 +413,9 @@ def disponivel(perfil: Perfil, tem_ffmpeg: bool) -> bool:
     return tem_ffmpeg or not perfil.exige_ffmpeg
 
 
-def opcoes_ytdlp(perfil: Perfil, formatos: Sequence[Formato], destino: str) -> dict:
+def opcoes_ytdlp(
+    perfil: Perfil, formatos: Sequence[Formato], destino: str, trecho: Trecho | None = None
+) -> dict:
     """Monta o dicionário de opções do yt-dlp a partir do perfil.
 
     Recebe os formatos porque o seletor depende da orientação do vídeo
@@ -413,7 +424,7 @@ def opcoes_ytdlp(perfil: Perfil, formatos: Sequence[Formato], destino: str) -> d
     `noplaylist` entra sempre: é a segunda linha de defesa contra arrastar um
     canal inteiro. A primeira é a validação de link (SPEC 5.3).
     """
-    return {
+    opcoes = {
         "format": resolver_format(perfil, formatos),
         "format_sort": list(perfil.format_sort),
         "merge_output_format": perfil.merge_output_format,
@@ -421,3 +432,8 @@ def opcoes_ytdlp(perfil: Perfil, formatos: Sequence[Formato], destino: str) -> d
         "outtmpl": destino,
         "noplaylist": True,
     }
+    # Segundos crus, e não o download_ranges do yt-dlp: montá-lo exige
+    # importar yt_dlp, e o domínio não pode (REGRA 1). O adapter traduz.
+    if trecho is not None:
+        opcoes["trecho_s"] = (trecho.inicio_s, trecho.fim_s)
+    return opcoes

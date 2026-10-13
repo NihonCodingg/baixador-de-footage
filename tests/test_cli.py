@@ -98,14 +98,17 @@ class PipelineFalso:
         self.chamadas.append(("historico", termo, projeto, limite))
         return self._historico
 
-    def simular(self, urls, perfil, projeto=None, pasta=None):
+    def simular(self, urls, perfil, projeto=None, pasta=None, inicio=None, fim=None):
         self.chamadas.append(("simular", list(urls), perfil, projeto, pasta))
+        self.trecho = (inicio, fim)
         if self._erro:
             raise self._erro
         return self._simulacao
 
-    def enfileirar(self, urls, perfil, projeto=None, forcar=False, pasta=None):
+    def enfileirar(self, urls, perfil, projeto=None, forcar=False, pasta=None,
+                   inicio=None, fim=None):
         self.chamadas.append(("enfileirar", list(urls), perfil, projeto, forcar, pasta))
+        self.trecho = (inicio, fim)
         if self._erro:
             raise self._erro
         return [j["id"] for j in self._jobs]
@@ -556,3 +559,29 @@ def test_progresso_do_download_continua_em_bytes():
     })
     linha = linha_de_progresso(baixando, 1, 1)
     assert "9,0 MB / 18,0 MB" in linha and "1,0 MB/s" in linha
+
+
+@pytest.mark.parametrize("valor,esperado", [
+    ("1:30-2:45", ("1:30", "2:45")), ("1:30-", ("1:30", "")), ("-2:45", ("", "2:45")),
+])
+def test_trecho_e_repassado(valor, esperado):
+    falso = PipelineFalso(jobs=[job()])
+    main(["--perfil", "edicao_1080", "--projeto", "cliente_x", "--trecho", valor, URL],
+         pipeline=falso, escrever=Saida())
+    assert falso.trecho == esperado
+
+
+def test_trecho_tambem_vale_no_dry_run():
+    falso = PipelineFalso(simulacao=[])
+    main(["--dry-run", "--perfil", "edicao_1080", "--projeto", "cliente_x",
+          "--trecho", "0:10-0:20", URL], pipeline=falso, escrever=Saida())
+    assert falso.trecho == ("0:10", "0:20")
+
+
+def test_trecho_sem_hifen_e_recusado_antes_de_tudo():
+    falso = PipelineFalso(jobs=[job()])
+    saida = Saida()
+    codigo = main(["--perfil", "edicao_1080", "--projeto", "cliente_x", "--trecho", "1:30", URL],
+                  pipeline=falso, escrever=saida)
+    assert codigo == 1 and "INÍCIO-FIM" in saida.texto
+    assert falso.chamadas == []

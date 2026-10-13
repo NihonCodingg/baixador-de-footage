@@ -54,6 +54,10 @@ class CorpoFila(BaseModel):
     projeto: str | None = None
     pasta: str | None = None
     forcar: bool = False  # rebaixar um vídeo já concluído neste perfil
+    # Só um trecho, como o editor digitou ("1:30"). Vazios: o vídeo inteiro.
+    # Validar é regra de negócio: o erro vira 400 no pipeline (SPEC 12g).
+    inicio: str | None = None
+    fim: str | None = None
 
 
 class CorpoCookies(BaseModel):
@@ -131,7 +135,8 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
     @app.post("/api/fila")
     def enfileirar(corpo: CorpoFila):
         ids = pipeline.enfileirar(
-            corpo.urls, corpo.perfil, corpo.projeto, corpo.forcar, corpo.pasta
+            corpo.urls, corpo.perfil, corpo.projeto, corpo.forcar, corpo.pasta,
+            inicio=corpo.inicio, fim=corpo.fim,
         )
         return {"ids": ids}
 

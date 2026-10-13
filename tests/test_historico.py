@@ -493,3 +493,54 @@ def test_registro_tem_os_campos_novos():
     """Guard: o dataclass precisa expor ja_existia e aviso para a API."""
     campos = RegistroHistorico.__dataclass_fields__
     assert "ja_existia" in campos and "aviso" in campos
+
+
+# ===========================================================================
+# Trecho (SPEC 12g)
+# ===========================================================================
+
+
+def test_trecho_e_gravado_na_tentativa(h):
+    v = video()
+    r = h.iniciar(v, perfil="edicao_1080", projeto="pessoal", url_original="u", trecho="90-165")
+    assert h.obter_por_id(r.id).trecho == "90-165"
+    assert iniciar(h).trecho is None
+
+
+def test_ja_baixado_e_so_do_video_inteiro(h):
+    """Ter um trecho não é ter o vídeo: um trecho concluído não pode
+    bloquear o download do vídeo inteiro."""
+    v = video()
+    r = h.iniciar(v, perfil="edicao_1080", projeto="pessoal", url_original="u", trecho="90-165")
+    h.concluir(r.id, caminho="D:/t.mp4", tamanho_bytes=1)
+    assert h.ja_baixado(v.extractor, v.video_id, "edicao_1080") is None
+
+    inteiro = iniciar(h, v)
+    h.concluir(inteiro.id, caminho="D:/v.mp4", tamanho_bytes=1)
+    assert h.ja_baixado(v.extractor, v.video_id, "edicao_1080").caminho == "D:/v.mp4"
+
+
+def test_banco_antigo_ganha_a_coluna_sem_perder_nada(tmp_path):
+    """O historico.db do autor já tem 100+ tentativas, criado antes do
+    trecho existir. Subir a versão nova não pode apagar nem quebrar nada."""
+    caminho = tmp_path / "antigo.db"
+    con = sqlite3.connect(caminho)
+    sql = open("src/storage/schema.sql", encoding="utf-8").read()
+    con.executescript(sql.replace("    trecho          TEXT,\n", ""))
+    con.execute(
+        "INSERT INTO historico (extractor, video_id, perfil, url_original, url_canonica,"
+        " titulo, projeto, status, criado_em) VALUES ('Youtube','x','p','u','u','t','pj',"
+        "'concluido','2026-01-01T00:00:00+00:00')"
+    )
+    con.commit()
+    assert "trecho" not in [c[1] for c in con.execute("PRAGMA table_info(historico)")]
+    con.close()
+
+    hist = Historico(caminho)
+    hist.criar_schema()
+    hist.criar_schema()  # idempotente
+    try:
+        (antigo,) = hist.buscar()
+        assert antigo.video_id == "x" and antigo.trecho is None
+    finally:
+        hist.fechar()

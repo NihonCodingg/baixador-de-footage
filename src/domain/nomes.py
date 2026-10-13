@@ -152,10 +152,14 @@ def truncar_titulo(titulo: str, limite: int) -> str:
     return titulo[:limite].rstrip(" .")
 
 
-def montar_nome(titulo: str, video_id: str, data_upload: str | None, extensao: str) -> str:
+def montar_nome(
+    titulo: str, video_id: str, data_upload: str | None, extensao: str, sufixo: str | None = None
+) -> str:
     """Monta `{data} - {titulo} [{id}].{ext}`. SPEC 8.1.
 
-    Sem data_upload, o template vira `{titulo} [{id}].{ext}`.
+    Sem data_upload, o template vira `{titulo} [{id}].{ext}`. Com `sufixo`
+    (o trecho baixado, SPEC 12g), ele entra depois do id:
+    `{titulo} [{id}] trecho 1m30s-2m45s.{ext}`.
     NÃO trunca — quem trunca é montar_caminho, que conhece a pasta.
     """
     limpo = sanitizar(titulo)
@@ -163,7 +167,7 @@ def montar_nome(titulo: str, video_id: str, data_upload: str | None, extensao: s
         limpo = TITULO_FALLBACK
 
     prefixo = f"{data_upload} - " if data_upload else ""
-    base = f"{prefixo}{limpo} [{video_id}]"
+    base = f"{prefixo}{limpo} [{video_id}]" + (f" {sufixo}" if sufixo else "")
     return aplicar_reservado(base) + extensao
 
 
@@ -172,7 +176,12 @@ def _separador(pasta: str) -> str:
 
 
 def montar_caminho(
-    pasta_projeto: str, titulo: str, video_id: str, data_upload: str | None, extensao: str
+    pasta_projeto: str,
+    titulo: str,
+    video_id: str,
+    data_upload: str | None,
+    extensao: str,
+    sufixo: str | None = None,
 ) -> CaminhoMontado:
     """Caminho completo respeitando o orçamento de SPEC 8.3.
 
@@ -184,6 +193,8 @@ def montar_caminho(
     fixo = len(pasta_projeto) + len(separador) + len(f" [{video_id}]") + len(extensao)
     if data_upload:
         fixo += len(f"{data_upload} - ")
+    if sufixo:
+        fixo += len(f" {sufixo}")
 
     # RESERVA_COLISAO sai do orçamento porque o sufixo " (2)" é acrescentado
     # DEPOIS do truncamento, por resolver_colisao.
@@ -209,7 +220,7 @@ def montar_caminho(
         limpo = TITULO_FALLBACK
     limpo = truncar_titulo(limpo, orcamento)
 
-    nome = montar_nome(limpo, video_id, data_upload, extensao)
+    nome = montar_nome(limpo, video_id, data_upload, extensao, sufixo)
     return CaminhoMontado(f"{pasta_projeto}{separador}{nome}", aviso)
 
 

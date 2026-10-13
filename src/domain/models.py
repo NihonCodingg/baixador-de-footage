@@ -11,6 +11,7 @@ from datetime import datetime
 from enum import Enum
 
 from .erros import TransicaoIlegal
+from .trecho import Trecho
 
 
 class EstadoJob(str, Enum):
@@ -244,6 +245,8 @@ class Job:
     # transcode ainda roda. Não é estado novo — o job não está concluído
     # enquanto o arquivo final não existe.
     fase: str | None = None
+    # Só um pedaço do vídeo (SPEC 12g). None = o vídeo inteiro.
+    trecho: Trecho | None = None
 
     def transicionar(self, novo: EstadoJob) -> None:
         """Aplica uma transição, recusando as ilegais. SPEC 10.2.

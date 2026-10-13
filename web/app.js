@@ -118,6 +118,13 @@ function fmtDataHora(iso) {
   return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
+/* "90-165" (histórico) -> "1:30–2:45" */
+function fmtTrecho(texto) {
+  if (!texto) return null;
+  var partes = String(texto).split('-');
+  return fmtDuracao(Number(partes[0])) + '–' + fmtDuracao(Number(partes[1]));
+}
+
 /* "20260901" -> "01/09/2026" */
 function fmtDataUpload(s) {
   if (!s || s.length !== 8) return null;
@@ -383,7 +390,10 @@ function inspecionar() {
         perfil: $('#lote-perfil').value || null,
         projeto: $('#lote-projeto').value || null,
         forcar: false,
-        enfileirado: false
+        enfileirado: false,
+        modo: 'inteiro',    // 'inteiro' ou 'trecho' (SPEC 12g)
+        inicio: '',
+        fim: ''
       };
     });
     renderPreview();
@@ -441,7 +451,8 @@ function cartaoErro(item, i) {
 function cartaoVideo(p, i) {
   var v = p.item.video || {};
   var perfilSel = p.perfil;
-  var jaBaixado = (p.item.baixados || {})[perfilSel] || null;
+  // "Já baixado" é do vídeo inteiro: um trecho é outro arquivo (SPEC 12g).
+  var jaBaixado = p.modo === 'trecho' ? null : ((p.item.baixados || {})[perfilSel] || null);
   var dataUp = fmtDataUpload(v.data_upload);
   var maxQual = (v.qualidades && v.qualidades.length) ? Math.max.apply(null, v.qualidades) : null;
 
@@ -485,6 +496,26 @@ function cartaoVideo(p, i) {
       (p.enfileirado ? 'Na fila' : (jaBaixado && !p.forcar ? 'Enfileirar' : 'Enfileirar')) + '</button>' +
     '</div>';
 
+  // Trecho: os mesmos campos dos seletores acima, numa segunda linha. Fim
+  // vazio = até o final do vídeo; o placeholder mostra qual é esse final.
+  var travado = p.enfileirado ? ' disabled' : '';
+  html += '<div class="cartao__acoes">' +
+    '<label class="field field--inline"><span class="field__label">Baixar</span>' +
+      '<select class="select" data-acao="modo" data-i="' + i + '"' + travado + '>' +
+        '<option value="inteiro"' + (p.modo === 'inteiro' ? ' selected' : '') + '>Vídeo inteiro</option>' +
+        '<option value="trecho"' + (p.modo === 'trecho' ? ' selected' : '') + '>Só um trecho</option>' +
+      '</select></label>' +
+    (p.modo === 'trecho'
+      ? '<label class="field field--inline"><span class="field__label">Início</span>' +
+          '<input class="input mono" data-acao="inicio" data-i="' + i + '" value="' + esc(p.inicio) + '"' +
+          ' placeholder="0:00" spellcheck="false" autocomplete="off"' + travado + '></label>' +
+        '<label class="field field--inline"><span class="field__label">Fim</span>' +
+          '<input class="input mono" data-acao="fim" data-i="' + i + '" value="' + esc(p.fim) + '"' +
+          ' placeholder="' + esc(v.duracao_s ? fmtDuracao(v.duracao_s) : 'fim') + '"' +
+          ' spellcheck="false" autocomplete="off"' + travado + '></label>'
+      : '') +
+    '</div>';
+
   // aviso de site fora do YouTube — visível, não escondido
   if (p.item.aviso) {
     html += '<div class="nota nota--aviso">' +
@@ -526,7 +557,8 @@ function preencherSelectsPreview() {
     var s = selects[k], p = estado.preview[Number(s.dataset.i)];
     if (!p) continue;
     if (s.dataset.acao === 'perfil') preencherPerfis(s, p.perfil);
-    else preencherProjetos(s, p.projeto);
+    else if (s.dataset.acao === 'projeto') preencherProjetos(s, p.projeto);
+    else continue;      // "modo" já nasce com as opções certas
     p[s.dataset.acao] = s.value;
   }
   atualizarCampoAvulso();
@@ -539,9 +571,18 @@ function enfileirar(indices) {
 
   // /api/fila aceita um perfil e um projeto por chamada:
   // agrupa por (perfil, projeto, forcar)
+  // O trecho também vai por chamada: cada pedido leva um início e um fim.
+  var semTempo = itens.some(function (p) {
+    return p.modo === 'trecho' && !p.inicio.trim() && !p.fim.trim();
+  });
+  if (semTempo) {
+    toast('Informe o início ou o fim do trecho, ou escolha "Vídeo inteiro".', 'erro');
+    return;
+  }
   var grupos = {};
   itens.forEach(function (p) {
-    var chave = p.perfil + '|' + p.projeto + '|' + (p.forcar ? 1 : 0);
+    var trecho = p.modo === 'trecho' ? p.inicio.trim() + '|' + p.fim.trim() : '|';
+    var chave = p.perfil + '|' + p.projeto + '|' + (p.forcar ? 1 : 0) + '|' + trecho;
     (grupos[chave] = grupos[chave] || []).push(p);
   });
 
@@ -553,6 +594,7 @@ function enfileirar(indices) {
       perfil: partes[0],
       forcar: partes[2] === '1'
     };
+    if (partes[3] || partes[4]) { corpo.inicio = partes[3]; corpo.fim = partes[4]; }
     // Projeto cadastrado OU pasta avulsa: a API recusa os dois juntos.
     if (partes[1] === AVULSO) {
       corpo.pasta = $('#pasta-avulsa').value.trim();
@@ -761,7 +803,8 @@ function estruturaJob(j, posicao) {
     // sem isto o card ficaria parado em 100% sem explicação.
     (j.fase === 'convertendo' ? '<span class="tag">download pronto · convertendo para o Premiere</span>' : '') +
     '<span class="tag">' + esc(j.perfil) + '</span>' +
-    '<span class="tag">' + esc(rotuloProjeto(j.projeto)) + '</span></div>';
+    '<span class="tag">' + esc(rotuloProjeto(j.projeto)) + '</span>' +
+    (j.trecho ? '<span class="tag">trecho ' + esc(j.trecho.tela) + '</span>' : '') + '</div>';
   html += '<h3 class="titulo" title="' + esc(v.titulo) + '">' + esc(v.titulo) + '</h3>';
   html += '<div class="meta"><span class="meta__canal">' + esc(v.canal || 'canal desconhecido') + '</span>' +
     '<span class="meta__sep">/</span><span class="mono">' + esc(fmtDataHora(j.criado_em)) + '</span></div>';
@@ -856,6 +899,8 @@ function tentarDeNovo(id) {
   if (!job || !url) return;
   var corpo = Object.assign({ urls: [url], perfil: job.perfil, forcar: true },
                             destinoDe(job.projeto, job.pasta));
+  // O mesmo trecho: "tentar de novo" não pode virar o vídeo inteiro.
+  if (job.trecho) { corpo.inicio = String(job.trecho.inicio_s); corpo.fim = String(job.trecho.fim_s); }
   api('POST', '/api/fila', corpo)
     .then(function (r) {
       registrarSucessoApi();
@@ -906,7 +951,8 @@ function carregarHistorico() {
 function agruparHistorico(regs) {
   var ordem = [], por = {};
   regs.forEach(function (r) {
-    var chave = (r.extractor || '') + '|' + (r.video_id || '') + '|' + r.perfil;
+    // O trecho separa o grupo: um trecho e o vídeo inteiro são arquivos diferentes.
+    var chave = (r.extractor || '') + '|' + (r.video_id || '') + '|' + r.perfil + '|' + (r.trecho || '');
     if (!por[chave]) { por[chave] = []; ordem.push(por[chave]); }
     por[chave].push(r);
   });
@@ -941,6 +987,7 @@ function renderHistorico() {
             (r.ja_existia ? '<span class="tag">já existia</span>' : '') +
             '<span class="tag">' + esc(r.perfil) + '</span>' +
             '<span class="tag">' + esc(rotuloProjeto(r.projeto)) + '</span>' +
+            (r.trecho ? '<span class="tag">trecho ' + esc(fmtTrecho(r.trecho)) + '</span>' : '') +
             (anteriores.length
               ? '<button class="btn btn--mini btn--ghost" data-acao="expandir" ' +
                 'data-n="' + anteriores.length + '" aria-expanded="false">' +
@@ -1011,7 +1058,8 @@ function notaHistorico(r) {
     (interrompido && url
       ? '<button class="btn btn--mini" data-acao="refazer" data-url="' + esc(url) +
         '" data-perfil="' + esc(r.perfil) + '" data-projeto="' + esc(r.projeto) +
-        '" data-pasta="' + esc(r.pasta || '') + '">Baixar de novo</button>'
+        '" data-pasta="' + esc(r.pasta || '') + '" data-trecho="' + esc(r.trecho || '') +
+        '">Baixar de novo</button>'
       : '') +
     '</div>';
 }
@@ -1062,10 +1110,14 @@ function alternarTentativas(botao) {
    ocupa a chave no histórico; o arquivo parcial continua onde está, e o novo
    ganha sufixo " (2)" se o nome colidir. */
 function refazer(dados) {
-  api('POST', '/api/fila', Object.assign(
-    { urls: [dados.url], perfil: dados.perfil, forcar: true },
-    destinoDe(dados.projeto, dados.pasta)
-  )).then(function (r) {
+  var corpo = Object.assign({ urls: [dados.url], perfil: dados.perfil, forcar: true },
+                            destinoDe(dados.projeto, dados.pasta));
+  if (dados.trecho) {
+    var partes = dados.trecho.split('-');
+    corpo.inicio = partes[0];
+    corpo.fim = partes[1];
+  }
+  api('POST', '/api/fila', corpo).then(function (r) {
     (r.ids || []).forEach(function (id) { estado.urlPorJob[id] = dados.url; });
     toast('Na fila de novo.', 'ok');
     atualizarFila();
@@ -1335,6 +1387,14 @@ function ligarEventos() {
     p[s.dataset.acao] = s.value;
     if (s.dataset.acao === 'perfil') p.forcar = false;   // duplicata é por perfil
     renderPreview(); preencherSelectsPreview();
+  });
+  // Digitação nos campos de tempo: guarda sem redesenhar, senão o cursor
+  // sairia do campo a cada tecla.
+  $('#lista-preview').addEventListener('input', function (e) {
+    var campo = e.target.closest('input[data-acao]');
+    if (!campo) return;
+    var p = estado.preview[Number(campo.dataset.i)];
+    if (p) p[campo.dataset.acao] = campo.value;
   });
   $('#lista-preview').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-acao]');

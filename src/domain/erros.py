@@ -80,6 +80,10 @@ class TransicaoIlegal(ErroDeDominio):
     pass
 
 
+class TrechoInvalido(ErroDeDominio):
+    """O trecho pedido não é um intervalo válido deste vídeo."""
+
+
 class EspacoInsuficiente(ErroDeDominio):
     """O destino não tem espaço para o download + conversão + folga.
 

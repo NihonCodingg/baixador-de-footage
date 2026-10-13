@@ -3,6 +3,7 @@
     python -m src.cli --perfil edicao_1080 --projeto cliente_x URL [URL...]
     python -m src.cli --perfil edicao_1080 --pasta "D:/FOOTAGE/avulsa" URL
     python -m src.cli --dry-run --perfil edicao_1080 --projeto cliente_x URL
+    python -m src.cli --perfil edicao_1080 --projeto cliente_x --trecho 1:30-2:45 URL
     python -m src.cli --perfis
     python -m src.cli --projetos
     python -m src.cli --historico [TERMO]
@@ -316,8 +317,10 @@ def baixar(
     tty: bool,
     dormir=time.sleep,
     pasta: str | None = None,
+    inicio: str | None = None,
+    fim: str | None = None,
 ) -> int:
-    ids = pipeline.enfileirar(urls, perfil, projeto, forcar, pasta)
+    ids = pipeline.enfileirar(urls, perfil, projeto, forcar, pasta, inicio=inicio, fim=fim)
     plural = "link" if len(ids) == 1 else "links"
     onde = f"projeto {projeto}" if projeto else f"pasta avulsa {pasta}"
     escrever(f"{len(ids)} {plural} na fila — perfil {perfil}, {onde}.")
@@ -356,6 +359,11 @@ def construir_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--forcar", action="store_true", help="baixa de novo um vídeo já concluído neste perfil"
+    )
+    parser.add_argument(
+        "--trecho",
+        metavar="INÍCIO-FIM",
+        help="baixa só um pedaço: 1:30-2:45; '1:30-' vai até o fim, '-2:45' começa do início",
     )
     parser.add_argument(
         "--dry-run",
@@ -401,6 +409,14 @@ def main(argv: list[str] | None = None, *, pipeline=None, escrever=None) -> int:
         )
         return 1
 
+    inicio = fim = None
+    if argumentos.trecho is not None:
+        if "-" not in argumentos.trecho:
+            escrever("O --trecho é INÍCIO-FIM, com hífen: 1:30-2:45, 1:30- ou -2:45.")
+            return 1
+        inicio, _, fim = (parte.strip() for parte in argumentos.trecho.partition("-"))
+    argumentos.inicio, argumentos.fim = inicio, fim
+
     proprio = pipeline is None
     if proprio:
         pipeline = Pipeline(RAIZ / "config", RAIZ / "data")
@@ -439,7 +455,8 @@ def _executar(pipeline, argumentos, escrever) -> int:
     if argumentos.dry_run:
         return mostrar_simulacao(
             pipeline.simular(
-                argumentos.urls, argumentos.perfil, argumentos.projeto, argumentos.pasta
+                argumentos.urls, argumentos.perfil, argumentos.projeto, argumentos.pasta,
+                inicio=argumentos.inicio, fim=argumentos.fim,
             ),
             destino,
             escrever,
@@ -453,6 +470,8 @@ def _executar(pipeline, argumentos, escrever) -> int:
         escrever,
         sys.stdout.isatty(),
         pasta=argumentos.pasta,
+        inicio=argumentos.inicio,
+        fim=argumentos.fim,
     )
 
 
