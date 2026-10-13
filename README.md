@@ -93,6 +93,31 @@ na 3.14). Ambiente virtual, o `Baixador.bat` de duplo clique, atalho e ícone:
 [docs/instalacao-windows.md](docs/instalacao-windows.md). Linha de comando:
 [docs/cli.md](docs/cli.md).
 
+### "Confirme que você não é um robô"
+
+Depois de muitos downloads seguidos, o YouTube bloqueia a sua conexão e
+passa a exigir login. A saída é dar ao Baixador a sua sessão do YouTube.
+
+Brave, Chrome e Edge no Windows criptografam os cookies de um jeito que o
+yt-dlp não lê (`Failed to decrypt with DPAPI`, mesmo com o navegador
+fechado). Então a sessão vai por um arquivo:
+
+1. Instale a extensão **Get cookies.txt LOCALLY** no Brave.
+2. Em `brave://extensions` → Detalhes da extensão → ligue **Permitir no modo
+   privado**.
+3. Abra uma **janela privada** (Ctrl+Shift+N) e entre na sua conta do YouTube.
+4. Ainda nela, abra `https://www.youtube.com/robots.txt`, clique na extensão
+   e exporte (formato Netscape).
+5. **Feche a janela privada logo em seguida.** O YouTube troca os cookies de
+   uma sessão aberta, e uma cópia tirada de aba em uso perde o login em
+   pouco tempo — é o que o yt-dlp recomenda.
+6. Salve o arquivo como `data/cookies.txt`, dentro da pasta do projeto.
+
+Vale no próximo download, sem reiniciar. Se o arquivo não tiver o login
+(falta o cookie `LOGIN_INFO`), o painel **Ajustes** diz isso. O arquivo é a
+chave da sua conta: `data/` e `cookies.txt` estão no `.gitignore` e nunca vão
+para o GitHub.
+
 ## Testes
 
 **747 testes, nenhum toca a rede.** Os metadados vêm de um `info_dict` real

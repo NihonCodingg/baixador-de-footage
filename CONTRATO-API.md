@@ -431,13 +431,13 @@ para o usuário, já em português. Códigos possíveis:
 |---|---|---|
 | `indisponivel` | Vídeo removido ou inexistente | Não |
 | `privado` | Vídeo privado | Não |
-| `restricao_idade` | Exige conta autenticada | Não |
+| `restricao_idade` | Exige conta logada e maior de 18 anos | Não sozinho — pôr um `cookies.txt` da conta em `data/cookies.txt` (README) e tentar de novo |
 | `bloqueio_regional` | Bloqueado no país | Não |
 | `drm` | Conteúdo protegido. **Fora do escopo da ferramenta**, por decisão | Não |
 | `site_nao_suportado` | O site não é suportado | Não |
 | `rede` | Falha de rede | **Sim** |
 | `rate_limit` | O site limitou as requisições | **Sim**, depois de esperar |
-| `bloqueio_bot` | O YouTube pediu confirmação de que não é um robô | Não sozinho — ligar os cookies em §3.10. O bloqueio é intermitente, então às vezes o mesmo link passa minutos depois |
+| `bloqueio_bot` | O YouTube pediu confirmação de que não é um robô | Não sozinho — ligar os cookies em §3.10 ou pôr um `cookies.txt` em `data/cookies.txt`. O bloqueio é intermitente, então às vezes o mesmo link passa minutos depois |
 | `cookies` | Os cookies do navegador configurado não puderam ser lidos | Não — corrigir ou desligar em §3.10 |
 | `sem_ffmpeg` | ffmpeg ausente | Não (instalar) |
 | `disco` | Falha ao gravar | Não |
