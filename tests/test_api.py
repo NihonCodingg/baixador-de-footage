@@ -7,6 +7,7 @@ Referência: SPEC 11.
 """
 
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -627,7 +628,8 @@ def test_main_abre_a_pagina_no_navegador(monkeypatch, web):
     assert len(TimerFalso.criados) == 1
     agendado = TimerFalso.criados[0]
     assert agendado.funcao is registrar
-    assert agendado.args == ("http://127.0.0.1:8000",)
+    (endereco,) = agendado.args
+    assert re.fullmatch(r"http://127\.0\.0\.1:8000/\?v=\d+", endereco), "sempre um endereço novo"
     assert agendado.iniciado and agendado.cancelado
     assert aberto == [], "o dublê não dispara: quem abre é o Timer real"
 
@@ -721,3 +723,17 @@ def test_tela_e_sempre_revalidada(caminho):
         r = c.get(caminho)
     assert r.status_code == 200
     assert "no-cache" in r.headers.get("cache-control", "")
+
+
+def test_a_pagina_pede_app_js_e_style_css_com_versao():
+    """O cache antigo do Edge (arquivos servidos SEM Cache-Control antes da
+    correção) não some com o no-cache novo: o navegador acha que a cópia
+    guardada ainda vale. Um endereço novo por versão (`app.js?v=...`) é um
+    arquivo que ele nunca guardou — a tela nova chega na hora."""
+    with TestClient(criar_app(PipelineFalso()), base_url=LOCAL) as c:
+        html = c.get("/").text
+        assert re.search(r'src="app\.js\?v=\d+"', html)
+        assert re.search(r'href="style\.css\?v=\d+"', html)
+        versao = re.search(r'app\.js\?v=(\d+)', html).group(1)
+        assert c.get(f"/app.js?v={versao}").status_code == 200
+        assert "no-cache" in c.get("/").headers["cache-control"]

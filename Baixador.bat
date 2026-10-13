@@ -30,7 +30,7 @@ echo O Baixador ja esta rodando. Abrindo a janela.
 set "EDGE=%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"
 if not exist "%EDGE%" set "EDGE=%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"
 if not exist "%EDGE%" goto :aba_comum
-start "" "%EDGE%" --app=%ENDERECO% --window-size=1440,900
+start "" "%EDGE%" --app=%ENDERECO%/?v=%RANDOM% --window-size=1440,900
 exit /b 0
 :aba_comum
 start "" "%ENDERECO%"

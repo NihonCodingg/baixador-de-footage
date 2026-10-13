@@ -8,6 +8,7 @@ mensagem de erro.
 
 from pathlib import Path
 
+import re
 import pytest
 
 from src.web.app import PORTA
@@ -141,3 +142,13 @@ def test_favicon_existe_e_e_servido_pela_pagina():
     html = (RAIZ / "web" / "index.html").read_text(encoding="utf-8")
     assert 'href="favicon.svg"' in html
     assert (RAIZ / "web" / "favicon.svg").exists()
+
+
+def test_ja_rodando_abre_um_endereco_novo_a_cada_vez(texto):
+    """Mesmo motivo do app.js?v=: um endereço que o Edge nunca guardou."""
+    assert "--app=%ENDERECO%/?v=%RANDOM%" in texto
+
+
+def test_janela_do_app_abre_endereco_com_versao():
+    from src.web.app import endereco_da_janela
+    assert re.fullmatch(r"http://127\.0\.0\.1:8000/\?v=\d+", endereco_da_janela())

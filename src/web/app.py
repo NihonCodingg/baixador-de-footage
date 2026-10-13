@@ -16,6 +16,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -24,7 +25,7 @@ import uvicorn
 from fastapi import FastAPI, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel
@@ -203,8 +204,28 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
     def config():
         return pipeline.config()
 
+    pasta = Path(pasta_web or PASTA_WEB)
+
+    @app.get("/", include_in_schema=False)
+    def pagina():
+        """index.html com `app.js?v=` e `style.css?v=`.
+
+        Os arquivos da tela foram servidos por muito tempo SEM Cache-Control,
+        e o Edge guardou cópias que considera válidas por horas — o recurso
+        de trecho não aparecia nem com Ctrl+F5 na janela de app. O
+        no-cache resolve dali para a frente; o endereço com a versão (a hora
+        de modificação dos arquivos) resolve também o que já estava guardado:
+        um endereço novo é um arquivo que o navegador nunca viu.
+        """
+        html = (pasta / "index.html").read_text(encoding="utf-8")
+        marcas = [int(f.stat().st_mtime) for f in (pasta / "app.js", pasta / "style.css") if f.exists()]
+        versao = max(marcas, default=0)
+        html = html.replace('src="app.js"', f'src="app.js?v={versao}"')
+        html = html.replace('href="style.css"', f'href="style.css?v={versao}"')
+        return HTMLResponse(html)
+
     # Estáticos por último: o mount em "/" pega tudo que as rotas não pegaram.
-    app.mount("/", StaticFiles(directory=str(pasta_web or PASTA_WEB), html=True), name="web")
+    app.mount("/", StaticFiles(directory=str(pasta), html=True), name="web")
     return app
 
 
@@ -232,6 +253,12 @@ def abrir_como_app(url: str, existe=os.path.exists, executar=subprocess.Popen,
         abrir_aba(url)
 
 
+def endereco_da_janela() -> str:
+    """A página com `?v=`: a janela abre um endereço que o Edge nunca
+    guardou em cache, e a tela vem sempre da versão que está no ar."""
+    return f"{ENDERECO}/?v={int(time.time())}"
+
+
 def main(abrir_navegador=abrir_como_app) -> None:
     """Sobe o Pipeline real, o uvicorn em 127.0.0.1 e a página no navegador.
 
@@ -247,7 +274,7 @@ def main(abrir_navegador=abrir_como_app) -> None:
     pipeline = Pipeline(RAIZ / "config", RAIZ / "data")
     print(f"Baixador de Footage em {ENDERECO} — Ctrl+C para encerrar.")
 
-    temporizador = threading.Timer(ESPERA_NAVEGADOR, abrir_navegador, (ENDERECO,))
+    temporizador = threading.Timer(ESPERA_NAVEGADOR, abrir_navegador, (endereco_da_janela(),))
     temporizador.daemon = True
     temporizador.start()
     try:
