@@ -704,3 +704,20 @@ def test_fila_sem_trecho_e_o_video_inteiro(cliente):
     c, p = cliente
     c.post("/api/fila", json={"urls": ["u"], "perfil": "x", "projeto": "y"})
     assert p.trecho == (None, None)
+
+
+# ===========================================================================
+# Cache da tela
+# ===========================================================================
+
+
+@pytest.mark.parametrize("caminho", ["/", "/app.js", "/style.css"])
+def test_tela_e_sempre_revalidada(caminho):
+    """Bug real: sem Cache-Control, o Edge reaproveitava o app.js antigo
+    depois de uma atualização, e o recurso novo (trecho) não aparecia nem
+    com o servidor já reiniciado. no-cache = confere a versão a cada
+    abertura; como o ETag continua, o que não mudou volta em 304."""
+    with TestClient(criar_app(PipelineFalso()), base_url=LOCAL) as c:  # a pasta web/ real
+        r = c.get(caminho)
+    assert r.status_code == 200
+    assert "no-cache" in r.headers.get("cache-control", "")

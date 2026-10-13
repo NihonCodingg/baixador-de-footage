@@ -103,6 +103,17 @@ def criar_app(pipeline, pasta_web: Path | None = None) -> FastAPI:
     # com o domínio dele — é isso que esta checagem recusa, com 400.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=HOSTS_LOCAIS)
 
+    @app.middleware("http")
+    async def _sem_tela_velha(request: Request, call_next):
+        # Sem Cache-Control, o navegador reaproveita o app.js por um tempo
+        # que ele mesmo estima: depois de uma atualização, a janela seguia
+        # com a tela antiga (o campo de trecho não aparecia) mesmo com o
+        # servidor novo no ar. no-cache manda conferir a cada abertura; o
+        # ETag continua, então o que não mudou volta em 304, sem custo.
+        resposta = await call_next(request)
+        resposta.headers.setdefault("Cache-Control", "no-cache")
+        return resposta
+
     # ----------------------------------------------------------- erros
 
     @app.exception_handler(EntradaInvalida)
