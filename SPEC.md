@@ -1090,6 +1090,31 @@ Cada item tem teste que falhava antes da correção.
 - O filtro de projeto do histórico não tinha "Pasta avulsa", e voltava para
   "Todos" sozinho ao cadastrar um projeto.
 
+## 12g. Baixar só um trecho
+
+Pedido do autor: escolher entre o vídeo inteiro e um pedaço. Decisões dele:
+corte **rápido, no keyframe, sem recomprimir** (o trecho vem com alguns
+segundos a mais em cada ponta, aparados na timeline), e **início e fim no
+card** do preview.
+
+- O domínio (`src/domain/trecho.py`) lê `90`, `1:30` e `1:02:03`; só o
+  primeiro campo passa de 59. Início vazio = começo, fim vazio = final; os
+  dois vazios, ou o vídeo todo, = inteiro. Início ≥ fim e fim além da
+  duração são recusados, com a duração na mensagem. Sem duração conhecida,
+  o fim é obrigatório.
+- O domínio entrega segundos (`trecho_s`); só o adapter monta o
+  `download_ranges` do yt-dlp (REGRA 1). Sem `force_keyframes_at_cuts`.
+- Nome: `… [id] trecho 1m30s-2m45s.ext`, dentro do orçamento de 240.
+- Histórico: coluna `trecho` (`'90-165'`), criada por migração em bancos
+  antigos. "Já baixado" só olha o vídeo inteiro; trechos diferentes do mesmo
+  vídeo convivem na fila, o mesmo trecho duas vezes não.
+- Espaço: proporcional ao trecho, mais 20 s de folga, nunca acima do vídeo
+  inteiro. A conversão mede o progresso pela duração do trecho.
+
+Medido (Zelda, 4K60, `premiere_4k_rapido`, trecho 1:30–1:40): 26 s do pedido
+ao .mp4 pronto; arquivo H.265 3840x2160 com 14 s. Sem conversão, 10 s viraram
+um .mkv de 20 s em 7,6 s.
+
 ---
 
 ## 13. Decisões tomadas sem consulta

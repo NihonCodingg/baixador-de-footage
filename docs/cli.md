@@ -17,6 +17,7 @@ duas vezes. Outras opções:
 | `--projetos` | Lista os projetos, a pasta de destino e o motivo de um inválido |
 | `--historico [TERMO]` | Consulta o histórico; `TERMO` busca no título ignorando acento |
 | `--forcar` | Baixa de novo um vídeo já concluído naquele perfil |
+| `--trecho INÍCIO-FIM` | Baixa só um pedaço: `1:30-2:45`; `1:30-` vai até o fim, `-2:45` começa do início |
 
 Ao final de um download a CLI imprime quantos foram baixados, quantos **já
 existiam** no destino e quantas falhas houve, com o caminho de cada arquivo.

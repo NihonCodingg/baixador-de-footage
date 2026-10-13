@@ -161,6 +161,13 @@ Corpo:
 - `forcar`: opcional, padrão `false`. `true` baixa de novo um vídeo já
   concluído neste perfil. O arquivo antigo **nunca é sobrescrito**: o novo ganha
   sufixo ` (2)`, e **os dois continuam no histórico**.
+- `inicio` e `fim`: opcionais, texto como o editor digita (`"90"`, `"1:30"`,
+  `"1:02:03"`). Pedem só um **trecho** de cada vídeo. Início vazio = desde o
+  começo; fim vazio = até o final; os dois vazios, ou um trecho que cobre o
+  vídeo todo, = vídeo inteiro. Tempo inválido, início depois do fim ou fim
+  depois da duração é **400**, com a duração na mensagem. O corte é no
+  keyframe, sem recomprimir: o arquivo vem com alguns segundos a mais em cada
+  ponta. O "já baixado" (409) só vale para o vídeo inteiro.
 
 Resposta: `{"ids": ["..."]}` — um id por job criado, na ordem das `urls`.
 
@@ -189,6 +196,8 @@ Campos de cada job:
 | `id` | string | Para o `DELETE` |
 | `estado` | string | Um dos seis de §6 |
 | `url` | string | O link que originou o job. Reenfileirar com ele ("tentar de novo") não depende do que a aba lembra |
+| `trecho` | objeto ou null | `{"inicio_s": 90, "fim_s": 165, "tela": "1:30–2:45"}` quando só um pedaço foi pedido; null = vídeo inteiro. "Tentar de novo" reenvia `inicio_s` e `fim_s` |
+| `pasta` | string ou null | A pasta avulsa do job, para "tentar de novo" reenviá-la; null num projeto |
 | `perfil`, `projeto` | string | Os `nome`s |
 | `criado_em` | ISO-8601 UTC | Ex.: `2026-09-02T18:48:58+00:00` |
 | `video` | objeto | `id`, `titulo`, `canal`, `duracao_s`, `thumbnail` |
@@ -233,7 +242,8 @@ tentativa mais recente e permitir expandir as anteriores.
 Campos: `titulo`, `canal`, `duracao_s`, `perfil`, `projeto`, `caminho` (onde o
 arquivo está), `tamanho_bytes`, `resolucao` (a que **realmente** foi baixada,
 ex.: `1080x1920`), `status`, `ja_existia`, `aviso`, `motivo_falha`,
-`mensagem_falha`, `criado_em`, `concluido_em`.
+`mensagem_falha`, `criado_em`, `concluido_em`, `trecho` (`"90-165"` em segundos,
+ou null para o vídeo inteiro), `pasta` (a pasta de um download avulso, ou null).
 
 `status` no histórico: `baixando`, `concluido`, `falhou`, `interrompido`.
 
