@@ -7,7 +7,13 @@ nome de arquivo e destino chegam prontos do domínio.
 Ticket: T1.
 """
 
+import os
+import shutil
+import threading
+import uuid
 from collections.abc import Callable
+from contextlib import contextmanager
+from pathlib import Path
 
 import yt_dlp
 import yt_dlp.cookies
@@ -42,10 +48,15 @@ class Downloader:
     vez de import direto no método, para o adapter ser testável sem rede.
     """
 
-    def __init__(self, fabrica_ydl=None, cookies=None):
+    def __init__(self, fabrica_ydl=None, cookies=None, arquivo_cookies=None):
         self._fabrica = fabrica_ydl or yt_dlp.YoutubeDL
         self._cookies = None
         self.definir_cookies(cookies)
+        # cookies.txt exportado do navegador. Conferido A CADA chamada, e não
+        # só na subida: colocar o arquivo no lugar vale para o próximo
+        # download, sem reiniciar.
+        self._arquivo_cookies = Path(arquivo_cookies) if arquivo_cookies else None
+        self._trava_arquivo = threading.Lock()
 
     def definir_cookies(self, navegador_e_perfil) -> None:
         """Liga ou desliga o --cookies-from-browser. `None` desliga.
@@ -69,15 +80,43 @@ class Downloader:
     def cookies(self):
         return self._cookies
 
-    def _com_cookies(self, opcoes: dict) -> dict:
-        """Acrescenta o cookiesfrombrowser, quando ligado.
+    @contextmanager
+    def _com_cookies(self, opcoes: dict):
+        """As opções com os cookies, quando houver.
 
         Vai nas DUAS chamadas: o bloqueio antibot acontece já na inspeção,
         antes de qualquer download.
+
+        O arquivo de cookies tem prioridade sobre o navegador, e entra como
+        CÓPIA. O yt-dlp regrava o cookiefile ao fechar, sem trava nenhuma
+        (YoutubeDLCookieJar.save abre e escreve), e a inspeção da tela pode
+        rodar junto com o download do worker: duas gravações no mesmo
+        arquivo podem embaralhá-lo. Cada chamada usa a sua cópia, e no fim
+        ela volta para o lugar do original numa troca atômica (os.replace) —
+        assim os cookies que o YouTube renova durante o uso não se perdem.
         """
-        if self._cookies:
-            opcoes["cookiesfrombrowser"] = self._cookies
-        return opcoes
+        arquivo = self._arquivo_cookies
+        if arquivo is None or not arquivo.is_file():
+            if self._cookies:
+                opcoes["cookiesfrombrowser"] = self._cookies
+            yield opcoes
+            return
+
+        copia = arquivo.with_name(f".{arquivo.name}.{uuid.uuid4().hex[:8]}.em-uso")
+        with self._trava_arquivo:
+            shutil.copyfile(arquivo, copia)
+        opcoes["cookiefile"] = str(copia)
+        try:
+            yield opcoes
+        finally:
+            with self._trava_arquivo:
+                try:
+                    if copia.is_file() and copia.stat().st_size > 0:
+                        os.replace(copia, arquivo)
+                except OSError:
+                    pass
+                finally:
+                    copia.unlink(missing_ok=True)
 
     def inspecionar(self, url: str) -> dict:
         """extract_info(download=False) + sanitize_info.
@@ -98,7 +137,7 @@ class Downloader:
         try:
             # `with` fecha o cache de conexões ao sair. Sem ele, sockets ficam
             # abertos num worker de longa duração (RESEARCH 1.1).
-            with self._fabrica(self._com_cookies(opcoes)) as ydl:
+            with self._com_cookies(opcoes) as efetivas, self._fabrica(efetivas) as ydl:
                 bruto = ydl.extract_info(url, download=False)
                 # Sem sanitize_info o resultado não é serializável em JSON
                 # (RESEARCH 1.3), e a API devolve JSON.
@@ -143,7 +182,7 @@ class Downloader:
             efetivas["outtmpl"] = efetivas["outtmpl"].replace("%", "%%")
 
         try:
-            with self._fabrica(self._com_cookies(efetivas)) as ydl:
+            with self._com_cookies(efetivas) as com_cookies, self._fabrica(com_cookies) as ydl:
                 info = ydl.extract_info(url, download=True)
         except ErroDeDownload:
             raise
@@ -179,6 +218,32 @@ def testar_cookies(navegador: str, perfil: str | None = None) -> str | None:
     except Exception as erro:  # noqa: BLE001 — qualquer falha
         texto = str(erro).strip() or type(erro).__name__
         return texto.split("\n")[0][:300]
+    return None
+
+
+def analisar_arquivo_cookies(caminho) -> str | None:
+    """None se o cookies.txt tem uma sessão LOGADA do YouTube; senão, o motivo.
+
+    O critério é o do próprio yt-dlp (YoutubeBaseInfoExtractor
+    ._has_auth_cookies): LOGIN_INFO e um SAPISID. O código dele registra que
+    o YouTube apaga o LOGIN_INFO quando troca os cookies — e é isso que
+    sobra numa cópia tirada de uma aba em uso: cookies de visitante, que não
+    passam pelo bloqueio antibot. Medido com o arquivo do autor.
+    """
+    try:
+        jarro = yt_dlp.cookies.YoutubeDLCookieJar(str(caminho))
+        jarro.load()
+    except Exception as erro:  # noqa: BLE001 — qualquer formato inválido
+        return f"o arquivo não é um cookies.txt válido ({str(erro).strip()[:120]})"
+    nomes = {c.name for c in jarro if c.domain.endswith("youtube.com")}
+    if not nomes:
+        return "o arquivo não tem cookies do YouTube"
+    if "LOGIN_INFO" not in nomes or not nomes & {"SAPISID", "__Secure-1PAPISID", "__Secure-3PAPISID"}:
+        return (
+            "o arquivo não tem o login do YouTube (falta o LOGIN_INFO). O YouTube "
+            "troca esses cookies durante o uso: exporte de novo numa janela "
+            "anônima, logo depois de entrar na conta, e feche a janela em seguida"
+        )
     return None
 
 

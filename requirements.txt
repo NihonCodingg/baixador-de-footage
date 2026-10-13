@@ -7,6 +7,12 @@
 # mudam, e atualizar é rotina.
 yt-dlp>=2026.7.4
 
+# Scripts oficiais do yt-dlp que resolvem o desafio em JavaScript do YouTube
+# (executados pelo Deno ou Node já instalados). Sem eles, com cookies de conta
+# logada — o caminho para vídeo com restrição de idade e para o bloqueio
+# antibot — o YouTube responde "The page needs to be reloaded". Medido.
+yt-dlp-ejs>=0.8.0
+
 # Servidor da API. Escolhido por validação de corpo e tipagem embutidas, o
 # que mantém src/web/ fino: ele só valida e delega para o pipeline.
 fastapi>=0.115

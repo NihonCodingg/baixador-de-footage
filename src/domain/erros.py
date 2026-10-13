@@ -30,7 +30,11 @@ class MotivoFalha(str, Enum):
 MENSAGENS = {
     MotivoFalha.INDISPONIVEL: "Vídeo indisponível ou removido.",
     MotivoFalha.PRIVADO: "Vídeo privado. Só o dono tem acesso.",
-    MotivoFalha.RESTRICAO_IDADE: "Vídeo com restrição de idade — exige conta autenticada.",
+    MotivoFalha.RESTRICAO_IDADE: (
+        "Vídeo com restrição de idade: o YouTube só o entrega para uma conta "
+        "logada e maior de 18 anos. Coloque um cookies.txt da sua conta em "
+        "data/cookies.txt (passo a passo no README) e tente de novo."
+    ),
     MotivoFalha.BLOQUEIO_REGIONAL: "Bloqueado na sua região.",
     MotivoFalha.DRM: "Conteúdo protegido por DRM. Fora do escopo desta ferramenta.",
     MotivoFalha.SITE_NAO_SUPORTADO: "Este site não é suportado pelo yt-dlp.",
@@ -38,8 +42,9 @@ MENSAGENS = {
     MotivoFalha.RATE_LIMIT: "O site limitou a taxa de requisições. Aguarde.",
     MotivoFalha.BLOQUEIO_BOT: (
         "O YouTube pediu confirmação de que você não é um robô. Ative os "
-        "cookies do navegador em Ajustes: a ferramenta passa a usar a sessão "
-        "que você já tem aberta, e o site para de pedir."
+        "cookies do navegador em Ajustes, ou coloque um cookies.txt exportado "
+        "do YouTube em data/cookies.txt (passo a passo no README): a "
+        "ferramenta passa a usar a sua sessão, e o site para de pedir."
     ),
     MotivoFalha.COOKIES: (
         "Não foi possível ler os cookies do navegador configurado. Feche o "

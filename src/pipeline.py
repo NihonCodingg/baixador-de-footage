@@ -36,7 +36,13 @@ from .domain.perfis import (
 )
 from .domain.projetos import NOME_AVULSO, Projeto, carregar_projetos, validar_nome
 from .domain.validacao import normalizar_link, normalizar_lote
-from .download.adapter import NAVEGADORES, Downloader, testar_cookies, validar_seletor
+from .download.adapter import (
+    NAVEGADORES,
+    Downloader,
+    analisar_arquivo_cookies,
+    testar_cookies,
+    validar_seletor,
+)
 from .download.conversao import converter as converter_com_ffmpeg
 from .download.ffmpeg import detectar
 from .download.traducao_erros import ErroDeDownload
@@ -166,8 +172,13 @@ class Pipeline:
             )
             self._cookies_nav = None
 
+        # cookies.txt exportado do navegador: a saída quando o navegador não
+        # deixa o yt-dlp ler os cookies (Brave/Chrome/Edge no Windows). Fica
+        # em data/, que o .gitignore exclui — o arquivo é o login da conta.
+        self._arquivo_cookies = self._data_dir / "cookies.txt"
         self._downloader = downloader or Downloader(
-            cookies=(self._cookies_nav, self._cookies_perfil)
+            cookies=(self._cookies_nav, self._cookies_perfil),
+            arquivo_cookies=self._arquivo_cookies,
         )
         self._ffmpeg = (detectar_ffmpeg or detectar)()
         # Injetados para o teste não abrir janela nenhuma.
@@ -935,13 +946,24 @@ class Pipeline:
     # ---------------------------------------------------------- cookies
 
     def cookies(self) -> dict:
-        """O que a tela precisa para mostrar e mudar a opção."""
+        """O que a tela precisa para mostrar e mudar a opção.
+
+        O arquivo é conferido a cada consulta: pôr ou trocar o cookies.txt
+        vale sem reiniciar, como no Downloader.
+        """
+        existe = self._arquivo_cookies.is_file()
+        problema = analisar_arquivo_cookies(self._arquivo_cookies) if existe else None
+        motivo = self._cookies_motivo
+        if problema:
+            motivo = f"data/cookies.txt: {problema}."
         return {
             "navegador": self._cookies_nav,
             "perfil": self._cookies_perfil,
-            "ativo": bool(self._cookies_nav),
-            "motivo": self._cookies_motivo,
+            "ativo": bool(self._cookies_nav) or (existe and not problema),
+            "motivo": motivo,
             "navegadores": list(NAVEGADORES),
+            "arquivo": {"caminho": str(self._arquivo_cookies), "existe": existe,
+                        "valido": existe and not problema},
         }
 
     def definir_cookies(self, navegador: str | None, perfil: str | None = None) -> dict:
@@ -964,6 +986,18 @@ class Pipeline:
         # normal.
         if navegador:
             detalhe = self._testar_cookies(navegador, perfil)
+            if detalhe and ("dpapi" in detalhe.lower() or "app-bound" in detalhe.lower()):
+                # Medido no Brave desta máquina, FECHADO: o erro continua. É a
+                # criptografia "App-Bound" dos navegadores Chromium no Windows
+                # (Chrome 127+, e o Brave a seguiu), que o yt-dlp não decifra.
+                # Fechar o navegador não adianta, e dizer que adianta manda o
+                # usuário num beco sem saída.
+                raise EntradaInvalida(
+                    f"O {navegador} guarda os cookies com uma criptografia que o "
+                    f"yt-dlp não consegue ler no Windows, mesmo com ele fechado. "
+                    f"Use o Firefox: entre no YouTube por ele uma vez e escolha "
+                    f"'firefox' aqui. Detalhe do yt-dlp: {detalhe}"
+                )
             if detalhe:
                 raise EntradaInvalida(
                     f"Não foi possível ler os cookies do {navegador}. "

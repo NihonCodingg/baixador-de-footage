@@ -813,7 +813,11 @@ def test_navegador_ilegivel_e_recusado_com_a_causa(ambiente, info_dict_real):
         with pytest.raises(EntradaInvalida) as erro:
             p.definir_cookies("edge")
         assert "DPAPI" in str(erro.value), "a causa real tem que chegar ao usuário"
-        assert "Feche o navegador" in str(erro.value)
+        # Medido no Brave desta máquina, FECHADO: o erro continua. É a
+        # criptografia nova dos navegadores Chromium, e fechar não adianta —
+        # mandar fechar era conselho errado.
+        assert "Feche o navegador" not in str(erro.value)
+        assert "Firefox" in str(erro.value)
         assert p.cookies()["ativo"] is False, "não pode ter ligado"
         assert not (ambiente["config"] / "cookies.yaml").exists(), "não pode ter gravado"
     finally:
@@ -1633,3 +1637,64 @@ def test_ja_baixado_continua_bloqueando_com_o_arquivo_no_disco(subir):
     assert "edicao_1080" in item["baixados"]
     with pytest.raises(Conflito, match="Já baixado"):
         p.enfileirar([URL_REAL], perfil="edicao_1080", projeto="pessoal")
+
+
+
+def test_cookies_travados_pelo_navegador_aberto_pedem_para_fechar(ambiente, info_dict_real):
+    """Medido no Brave aberto: o banco de cookies fica travado. Aí, sim,
+    fechar o navegador resolve."""
+
+    def travado(navegador, perfil=None):
+        return "Could not copy Chrome cookie database. See  https://...  for more info"
+
+    p = Pipeline(ambiente["config"], ambiente["data"], downloader=DownloaderEco(info_dict_real),
+                 detectar_ffmpeg=ffmpeg_presente, testar_cookies_de=travado)
+    try:
+        with pytest.raises(EntradaInvalida, match="Feche o navegador"):
+            p.definir_cookies("brave")
+    finally:
+        p.encerrar()
+
+
+# ===========================================================================
+# Arquivo de cookies em data/cookies.txt
+# ===========================================================================
+
+
+def _cookies_txt(caminho, nomes):
+    linhas = [f".youtube.com\tTRUE\t/\tTRUE\t1999999999\t{n}\tvalor-falso" for n in nomes]
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_text("# Netscape HTTP Cookie File\n\n" + "\n".join(linhas) + "\n",
+                       encoding="utf-8")
+
+
+def test_sem_arquivo_de_cookies_nada_muda(subir, ambiente):
+    p, _ = subir()
+    c = p.cookies()
+    assert c["arquivo"]["existe"] is False and c["ativo"] is False
+
+
+def test_arquivo_de_cookies_logado_liga_os_cookies(ambiente, info_dict_real):
+    _cookies_txt(ambiente["data"] / "cookies.txt", ["LOGIN_INFO", "SAPISID", "SID"])
+    p = Pipeline(ambiente["config"], ambiente["data"], downloader=DownloaderEco(info_dict_real),
+                 detectar_ffmpeg=ffmpeg_presente)
+    try:
+        c = p.cookies()
+        assert c["ativo"] is True and c["arquivo"]["existe"] is True
+        assert c["motivo"] is None
+    finally:
+        p.encerrar()
+
+
+def test_arquivo_de_cookies_sem_login_aparece_nos_ajustes(ambiente, info_dict_real):
+    """O caso real: um cookies.txt só com cookies de visitante. A tela tem
+    que dizer o porquê, em vez de o download falhar com bloqueio_bot."""
+    _cookies_txt(ambiente["data"] / "cookies.txt", ["VISITOR_INFO1_LIVE", "__Secure-3PAPISID"])
+    p = Pipeline(ambiente["config"], ambiente["data"], downloader=DownloaderEco(info_dict_real),
+                 detectar_ffmpeg=ffmpeg_presente)
+    try:
+        c = p.cookies()
+        assert c["ativo"] is False
+        assert "LOGIN_INFO" in c["motivo"] and "cookies.txt" in c["motivo"]
+    finally:
+        p.encerrar()

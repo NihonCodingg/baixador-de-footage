@@ -203,6 +203,7 @@ var estado = {
   jobs: [],
   historico: [],
   urlPorJob: {},      // id do job -> url enviada (para "tentar de novo")
+  retentados: {},     // id do job falho -> já foi reenfileirado nesta aba
   pollAtivo: false,        // id do setTimeout do polling (não setInterval)
   pollEmVoo: false,
   falhasApi: 0,            // quedas seguidas da API: definem a espera
@@ -702,6 +703,7 @@ function atualizarNoJob(no, j, posicao) {
     no.dataset.jaExistia = jaExistia;
     no.dataset.fase = fase;
     no.innerHTML = estruturaJob(j, posicao);
+    if (estado.retentados[j.id]) marcarRetentado(no);
   }
 
   var q = function (sel) { return no.querySelector(sel); };
@@ -839,6 +841,15 @@ function destinoDe(projeto, pasta) {
   return pasta ? { pasta: pasta } : { projeto: projeto };
 }
 
+/* O card que já foi reenfileirado não oferece o botão de novo: um segundo
+   clique só daria "já está na fila". */
+function marcarRetentado(no) {
+  var b = no && no.querySelector('[data-acao="tentar"]');
+  if (!b) return;
+  b.disabled = true;
+  b.textContent = 'Na fila de novo';
+}
+
 function tentarDeNovo(id) {
   var job = estado.jobs.filter(function (j) { return j.id === id; })[0];
   var url = (job && job.url) || estado.urlPorJob[id];
@@ -847,8 +858,19 @@ function tentarDeNovo(id) {
                             destinoDe(job.projeto, job.pasta));
   api('POST', '/api/fila', corpo)
     .then(function (r) {
+      registrarSucessoApi();
       (r.ids || []).forEach(function (novo) { estado.urlPorJob[novo] = url; });
-      atualizarFila();
+      // Sem retorno nenhum, o clique parecia não ter feito nada: o card
+      // vermelho continuava igual, e o job novo nascia no FIM da fila, fora
+      // da vista. O botão muda, um toast confirma e a tela vai até o novo.
+      estado.retentados[id] = true;
+      marcarRetentado(nosJob[id]);
+      toast('Na fila de novo.', 'ok');
+      var novoId = (r.ids || [])[0];
+      var p = atualizarFila();
+      if (p && novoId) p.then(function () {
+        if (nosJob[novoId]) nosJob[novoId].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
     }).catch(function (e) {
       if (!registrarFalhaApi(e)) toast(e.message, 'erro');
     });
