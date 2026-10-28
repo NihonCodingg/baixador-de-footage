@@ -156,3 +156,27 @@ def remover(caminho: Path, nome: str) -> None:
     novo = re.sub(r"\n{3,}", "\n\n", novo)
     _conferir(novo, atuais - {nome})
     _gravar_atomico(caminho, novo)
+
+
+def criar_se_ausente(caminho: Path, casa: Path) -> bool:
+    """Cria o projetos.yaml com UM projeto em `casa`/Videos/Baixador, se ele
+    não existir. Devolve True se criou.
+
+    É a primeira execução do pacote portátil: ele vai sem projetos.yaml,
+    porque os do autor apontam para pastas que só existem no computador
+    dele. Um arquivo que já existe nunca é tocado.
+    """
+    if caminho.exists():
+        return False
+    pasta = (casa / "Videos" / "Baixador").as_posix()
+    texto = (
+        "# Destinos dos downloads. Edite pela tela, em Ajustes.\n"
+        "projetos:\n"
+        f"{INDENTACAO}videos:\n"
+        f"{INDENTACAO * 2}nome: {_escalar('Vídeos')}\n"
+        f"{INDENTACAO * 2}pasta: {_escalar(pasta)}\n"
+    )
+    _conferir(texto, {"videos"})
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    _gravar_atomico(caminho, texto)
+    return True

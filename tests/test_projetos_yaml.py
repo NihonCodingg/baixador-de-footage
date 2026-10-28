@@ -151,3 +151,31 @@ def test_gravacao_nao_deixa_temporario_para_tras(arquivo):
     adicionar(arquivo, "cliente_novo", "Cliente Novo", "D:/FOOTAGE/novo")
     restos = [p.name for p in arquivo.parent.iterdir() if p.name != arquivo.name]
     assert restos == [], f"sobrou lixo na pasta: {restos}"
+
+
+# ===========================================================================
+# Primeira execução (pacote portátil): sem projetos.yaml
+# ===========================================================================
+
+from src.storage.projetos_yaml import criar_se_ausente  # noqa: E402
+
+
+def test_sem_arquivo_cria_um_projeto_na_pasta_de_videos_do_usuario(tmp_path):
+    """O pacote portátil vai SEM projetos.yaml: os do autor apontam para o D:
+    dele. Na primeira subida, nasce um projeto na pasta de vídeos de quem
+    está usando — sem isso o Baixador nem sobe."""
+    arquivo = tmp_path / "config" / "projetos.yaml"
+    casa = tmp_path / "Usuário"
+    assert criar_se_ausente(arquivo, casa) is True
+    dados = yaml.safe_load(arquivo.read_text(encoding="utf-8"))
+    (projeto,) = dados["projetos"].values()
+    assert Path(projeto["pasta"]) == casa / "Videos" / "Baixador"
+
+
+def test_arquivo_existente_nunca_e_tocado(tmp_path):
+    arquivo = tmp_path / "projetos.yaml"
+    arquivo.write_text("# meus projetos\nprojetos:\n  a:\n    nome: A\n    pasta: D:/A\n",
+                       encoding="utf-8")
+    antes = arquivo.read_bytes()
+    assert criar_se_ausente(arquivo, tmp_path) is False
+    assert arquivo.read_bytes() == antes

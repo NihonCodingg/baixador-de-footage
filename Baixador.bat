@@ -46,12 +46,24 @@ if not "%~1"=="--rodando" (
     exit /b 0
 )
 
-if exist ".venv\Scripts\python.exe" (
-    set PYTHON=.venv\Scripts\python.exe
-) else (
-    set PYTHON=python
-)
+rem Qual Python: o do pacote portatil (pasta python\ ao lado deste .bat),
+rem o do ambiente virtual, ou o do sistema. Labels e goto, e nao um bloco
+rem ( ): o PATH costuma ter "(x86)", que fecharia o parentese.
+set PYTHON=python
+if exist ".venv\Scripts\python.exe" set PYTHON=.venv\Scripts\python.exe
+if not exist "python\python.exe" goto :rodar
 
+rem Pacote portatil: ffmpeg e deno vem na pasta bin\, e o yt-dlp e
+rem atualizado a cada abertura - o YouTube muda sempre, e um yt-dlp
+rem parado deixa de baixar em poucas semanas. Sem internet, segue com a
+rem versao que ja esta no pacote.
+set PYTHON=python\python.exe
+set "PATH=%~dp0bin;%PATH%"
+echo Atualizando o yt-dlp...
+"%PYTHON%" -m pip install --disable-pip-version-check --no-warn-script-location -q -U yt-dlp yt-dlp-ejs
+if errorlevel 1 echo Nao foi possivel atualizar agora. Seguindo com a versao atual.
+
+:rodar
 chcp 65001 >NUL
 title Baixador de Footage - %ENDERECO%
 "%PYTHON%" -m src.web

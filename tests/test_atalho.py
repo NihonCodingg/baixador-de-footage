@@ -152,3 +152,21 @@ def test_ja_rodando_abre_um_endereco_novo_a_cada_vez(texto):
 def test_janela_do_app_abre_endereco_com_versao():
     from src.web.app import endereco_da_janela
     assert re.fullmatch(r"http://127\.0\.0\.1:8000/\?v=\d+", endereco_da_janela())
+
+
+def test_pacote_portatil_usa_python_e_programas_da_propria_pasta(texto):
+    """O amigo do autor recebe um zip, sem instalar nada: o .bat usa o
+    python\ e o bin\ (ffmpeg, deno) que vêm dentro dele."""
+    assert 'if not exist "python\python.exe" goto :rodar' in texto
+    assert 'set "PATH=%~dp0bin;%PATH%"' in texto
+
+
+def test_pacote_portatil_atualiza_o_yt_dlp_ao_abrir(texto):
+    assert "-m pip install" in texto and "-U yt-dlp yt-dlp-ejs" in texto
+
+
+def test_escolha_do_python_fora_de_bloco_entre_parenteses(texto):
+    """O PATH tem '(x86)': mexer nele dentro de um bloco ( ) fecha o
+    parêntese no meio. A linha do PATH não pode estar indentada num bloco."""
+    linha = next(l for l in texto.splitlines() if "%~dp0bin" in l)
+    assert not linha.startswith(" ")

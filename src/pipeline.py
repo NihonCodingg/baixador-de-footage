@@ -191,6 +191,10 @@ class Pipeline:
         # Injetado: o teste simula um disco cheio sem encher disco nenhum.
         self._espaco_livre = espaco_livre or _espaco_livre_no_disco
 
+        # Primeira execução do pacote portátil: sem projetos.yaml, nasce um
+        # na pasta de vídeos de quem está usando. Existindo, nada muda.
+        projetos_yaml.criar_se_ausente(self._config_dir / "projetos.yaml", Path.home())
+
         self._perfis = carregar_perfis(
             self._ler_yaml("perfis.yaml"), validar_seletor=validar_seletor
         )
