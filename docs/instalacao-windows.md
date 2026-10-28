@@ -98,3 +98,22 @@ duas vezes. Outras opções:
 Ao final de um download a CLI imprime quantos foram baixados, quantos **já
 existiam** no destino e quantas falhas houve, com o caminho de cada arquivo.
 Sai com código 0 se tudo deu certo e 1 se qualquer coisa falhou.
+
+## Pacote portátil (para usar em outro computador)
+
+```bash
+python scripts/empacotar.py
+```
+
+Gera `dist/Baixador-portatil.zip` (~185 MB): o Baixador, o Python portátil
+oficial, as bibliotecas, o tkinter, o ffmpeg, o ffprobe e o Deno desta
+máquina. Quem recebe extrai e dá duplo clique em `Baixador.bat` — sem
+instalar nada. Instruções para essa pessoa: `LEIA-ME.txt`, dentro do zip.
+
+- Vai **limpo**: sem `data/` (histórico e cookies) e sem
+  `config/projetos.yaml`. Na primeira abertura, o Baixador cria um projeto
+  em `Vídeos\Baixador` do usuário daquele computador.
+- A cada abertura, o `.bat` atualiza o yt-dlp: o YouTube muda sempre, e uma
+  versão parada deixa de baixar em poucas semanas. Sem internet, segue com a
+  que está no pacote.
+- O script só escreve em `dist/`, fora do git.
